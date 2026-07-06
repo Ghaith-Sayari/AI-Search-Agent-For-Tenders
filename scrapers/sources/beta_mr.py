@@ -22,15 +22,30 @@ class BetaMrScraper(BaseScraper):
         if not full_page_text:
             return "Unknown"
         
-        # Split text into clean, non-empty lines
-        lines = [line.strip() for line in full_page_text.split('\n') if line.strip()]
-        date_pattern = r"(\d{1,2}\s+(?:janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z]*\s+\d{4})"
+        # Added \.? to match abbreviated months with dots (e.g., "juil.")
+        # Added a fallback match for numeric dates (e.g., 01/07/2026)
+        date_pattern = r"(\d{1,2}\s+(?:janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z]*\.?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})"
 
+        # --- STRATEGY 1: Global Text Search (Safest against weird layout line-breaks) ---
+        text_clean = " ".join(full_page_text.split())
+        markers = ["date de publication", "publié le", "publication"]
+        
+        for marker in markers:
+            match_marker = re.search(r"\b" + re.escape(marker) + r"\b", text_clean, re.IGNORECASE)
+            if match_marker:
+                # Look up to 100 characters immediately after the found label
+                start_pos = match_marker.end()
+                sub_text = text_clean[start_pos:start_pos + 100]
+                date_match = re.search(date_pattern, sub_text, re.IGNORECASE)
+                if date_match:
+                    return date_match.group(1).strip()
+
+        # --- STRATEGY 2: Line-by-Line Fallback ---
+        lines = [line.strip() for line in full_page_text.split('\n') if line.strip()]
         for i, line in enumerate(lines):
-            # Locate the sidebar label
-            if "date de publication" in line.lower() or "publié le" in line.lower():
-                # Check the current line and the next 2 lines below it for the date text
-                for j in range(i, min(i + 3, len(lines))):
+            if any(m in line.lower() for m in markers):
+                # Check the current line and up to 3 lines below it
+                for j in range(i, min(i + 4, len(lines))):
                     match = re.search(date_pattern, lines[j], re.IGNORECASE)
                     if match:
                         return match.group(1).strip()
@@ -135,10 +150,8 @@ class BetaMrScraper(BaseScraper):
                     detail_page.goto(tender['url_link'], wait_until="load", timeout=30000)
                     detail_page.wait_for_timeout(1500)
                     
-                    # 1. Pull the absolute whole body text to ensure we hit sidebars/footers for the metadata
-                    whole_page_text = detail_page.query_selector('body').inner_text().strip()
-                    
-                    # 2. Pull content block purely for the main description payload
+                    # Read all text inside the view to scan for fallbacks
+                    full_body_text = detail_page.query_selector('body').inner_text().strip()
                     content_element = detail_page.query_selector('.main-content') or detail_page.query_selector('main') or detail_page.query_selector('#content') or detail_page.query_selector('article')
                     
                     if content_element:
@@ -146,14 +159,34 @@ class BetaMrScraper(BaseScraper):
                         if raw_description.startswith(tender['title']):
                             raw_description = raw_description[len(tender['title']):].strip()
                     else:
-                        raw_description = whole_page_text
+                        raw_description = full_body_text
                     
-                    # Assign parsed fields
                     tender['description'] = raw_description
-                    tender['posting_date'] = self._parse_posting_date(whole_page_text)
+                    
+                    # --- EXTRACTION OF POSTING DATE (Robust & Fixed regex) ---
+                    tender['posting_date'] = self._parse_posting_date(full_body_text)
+                    
+                    # --- ROBUST DETAIL-PAGE DATE FALLBACK BACKUP FOR DEADLINE ---
+                    if tender['deadline'] == "Unknown" or not tender['deadline']:
+                        months_extended = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+                        
+                        # Strategy A: Find the explicit "Date limite" line inside the single document
+                        for line in full_body_text.split('\n'):
+                            if "date limite" in line.lower() and any(m in line.lower() for m in months_extended):
+                                clean_date = re.sub(r'(?i)date limite\s*[:\-]\s*', '', line).strip()
+                                tender['deadline'] = clean_date
+                                break
+                        
+                        # Strategy B: Fallback line heading check
+                        if tender['deadline'] == "Unknown":
+                            for line in full_body_text.split('\n')[:15]:
+                                if any(m in line.lower() for m in months_extended) and any(c.isdigit() for c in line):
+                                    if len(line.strip()) < 40:
+                                        tender['deadline'] = line.strip().strip('-').strip()
+                                        break
                     
                     final_scraped_data.append(tender)
-                    print(f"   ↳ [✓] Successfully loaded payload. Posting Date: {tender['posting_date']}")
+                    print(f"   ↳ [✓] Successfully loaded payload. Pub Date: {tender['posting_date']} | Deadline: {tender['deadline']}")
                     
                 except Exception as e:
                     print(f"   ↳ [X] Failed to parse: {e}")
