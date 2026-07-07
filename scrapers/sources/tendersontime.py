@@ -87,15 +87,16 @@ class TendersOnTimeScraper(BaseScraper):
                             if country_match:
                                 country = country_match.group(1).strip()
 
-                        # Just append the raw dictionary exactly as you want it!
+                        # Initializing the raw dictionary structure with a single Description field
                         preliminary_tenders.append({
-                            "source": self.source_name, # Injected to help the normalizer
+                            "source": self.source_name,
                             "Titre": title,
                             "Pays": country,
                             "Posting Date": "N/A",
                             "Deadline": formatted_deadline,
                             "TOT Reference": tot_ref,
-                            "Lien de l'offre": detail_url
+                            "Lien de l'offre": detail_url,
+                            "Description": "N/A"  # All extra information will be loaded here
                         })
                 
                 if limite_atteinte:
@@ -115,7 +116,7 @@ class TendersOnTimeScraper(BaseScraper):
                 else:
                     break
                     
-            # --- ÉTAPE 2 : EXTRACTION DE LA POSTING DATE ---
+            # --- ÉTAPE 2 : EXTRACTION DU TEXTE DE DESCRIPTION COMPLET ---
             print(f"\n\n3. Visite ciblée des {len(preliminary_tenders)} pages de détails...")
             
             detail_page = await context.new_page()
@@ -123,7 +124,7 @@ class TendersOnTimeScraper(BaseScraper):
                 if not tender["Lien de l'offre"]:
                     continue
                     
-                print(f"   -> [{index+1}/{len(preliminary_tenders)}] Extraction Posting Date Ref: {tender['TOT Reference']}...", end="\r")
+                print(f"   -> [{index+1}/{len(preliminary_tenders)}] Extraction Description Ref: {tender['TOT Reference']}...", end="\r")
                 try:
                     await detail_page.goto(tender["Lien de l'offre"], wait_until="domcontentloaded", timeout=10000)
                     
@@ -132,15 +133,52 @@ class TendersOnTimeScraper(BaseScraper):
                         raw_text = await body_elem.inner_text()
                         clean_text = " ".join(raw_text.split())
                         
+                        # Extract and format Posting Date natively
                         posting_match = re.search(r"Posting\s*Date\s*:\s*([\d]+\s+[A-Za-z]+\s+[\d]{4})", clean_text, re.IGNORECASE)
-                        
                         if posting_match:
                             tender["Posting Date"] = self.format_date(posting_match.group(1))
                         else:
                             alternative_match = re.search(r"Posting\s*Date\s*([\d]+\s+[A-Za-z]+\s+[\d]{4})", clean_text, re.IGNORECASE)
                             if alternative_match:
                                 tender["Posting Date"] = self.format_date(alternative_match.group(1))
-                                
+
+                        # 1. Capture the main summary paragraph shown in your image
+                        paragraph_match = re.search(
+                            r"([^.]*?has issued a Tender notice for the procurement of.*?Registering on the platform\.?)", 
+                            clean_text, 
+                            re.IGNORECASE
+                        )
+                        
+                        description_block = ""
+                        if paragraph_match:
+                            description_block = paragraph_match.group(1).strip()
+                        
+                        # 2. Extract specific metadata from "Other Information" to guarantee nothing gets missed
+                        extractions = {
+                            "Notice Type": r"Notice\s*Type\s*:\s*(.*?)(?=\s*TOT\s*Ref\.No\.)",
+                            "Document Ref. No.": r"Document\s*Ref\.?\s*No\.?\s*:\s*(.*?)(?=\s*Competition\s*:)",
+                            "Competition": r"Competition\s*:\s*(.*?)(?=\s*Financier\s*:)",
+                            "Financier": r"Financier\s*:\s*(.*?)(?=\s*Purchaser\s*Ownership\s*:)",
+                            "Purchaser Ownership": r"Purchaser\s*Ownership\s*:\s*(.*?)(?=\s*Tender\s*Value\s*:)",
+                            "Tender Value": r"Tender\s*Value\s*:\s*(.*?)(?=\s*Purchaser's\s*Detail|$)"
+                        }
+                        
+                        meta_lines = []
+                        for key, pattern in extractions.items():
+                            m = re.search(pattern, clean_text, re.IGNORECASE)
+                            if m:
+                                meta_lines.append(f"{key}: {m.group(1).strip()}")
+
+                        # 3. Combine paragraph text and specifications cleanly into the Description field
+                        if meta_lines:
+                            metadata_string = " | ".join(meta_lines)
+                            if description_block:
+                                tender["Description"] = f"{description_block} [{metadata_string}]"
+                            else:
+                                tender["Description"] = metadata_string
+                        elif description_block:
+                            tender["Description"] = description_block
+
                 except Exception:
                     continue
 
@@ -149,11 +187,9 @@ class TendersOnTimeScraper(BaseScraper):
             # --- ÉTAPE 3 : SAUVEGARDE EN JSON RAW ---
             print("\n\n4. Sauvegarde des données brutes...")
             if preliminary_tenders:
-                # This automatically calls your new base.py function!
                 saved_file = self.save_raw_json(preliminary_tenders)
                 print(f"[Succès] Fichier JSON brut enregistré : {saved_file}")
             else:
                 print("[!] Aucune donnée à sauvegarder.")
 
-        # Return the unformatted dictionaries directly to your test script
         return preliminary_tenders

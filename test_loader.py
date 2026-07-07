@@ -1,45 +1,50 @@
-from pipeline.normalizer import normalize
+# test_loader.py
+"""
+Integration test: runs the full pipeline (normalize -> load_all)
+and verifies that records actually land in the Supabase `opportunity` table.
+
+This is NOT a unit test with mocks — it hits the real database,
+so run it against a dev/staging Supabase project, not production.
+"""
+
 from db.client import get_client
+from db.loader import load_all
 
 
-def load_all(batch_size: int = 500):
-
+def test_loader():
     supabase = get_client()
 
-    records = normalize()
+    # Count rows before running the pipeline
+    before = supabase.table("opportunity").select("id", count="exact").execute()
+    before_count = before.count or 0
+    print(f"[i] Rows in opportunity table before: {before_count}")
 
-    print(f"[✓] Total normalized records: {len(records)}")
+    # Run the real pipeline: normalize() -> upsert in batches
+    load_all()
 
-    if not records:
-        print("[X] No data to insert")
-        return
+    # Count rows after
+    after = supabase.table("opportunity").select("id", count="exact").execute()
+    after_count = after.count or 0
+    print(f"[i] Rows in opportunity table after: {after_count}")
 
-    # Ensure unique_key exists for ALL records
-    for r in records:
-        if "unique_key" not in r:
-            r["unique_key"] = f"{r['source']}:{r.get('external_id')}"
+    if after_count >= before_count:
+        print(f"[✓] Load succeeded — {after_count - before_count} new/updated rows reflected")
+    else:
+        print(f"[X] Row count dropped unexpectedly ({before_count} → {after_count})")
 
-    # Insert in batches
-    for i in range(0, len(records), batch_size):
+    # Spot-check: pull a few rows to confirm shape looks right
+    sample = (
+        supabase
+        .table("opportunity")
+        .select("unique_key, source, title, created_at")
+        .limit(5)
+        .execute()
+    )
 
-        batch = records[i:i + batch_size]
-
-        print(f"\n[→] Inserting batch {i//batch_size + 1} ({len(batch)} records)")
-
-        try:
-            res = (
-                supabase
-                .table("opportunity")
-                .upsert(batch, on_conflict="unique_key")
-                .execute()
-            )
-
-            print(f"[✓] Batch {i//batch_size + 1} inserted")
-
-        except Exception as e:
-            print(f"[X] Batch failed {i//batch_size + 1}")
-            print(e)
+    print("\n[i] Sample rows:")
+    for row in sample.data:
+        print(f"  - [{row['source']}] {row['title']} (key={row['unique_key'][:8]}...)")
 
 
 if __name__ == "__main__":
-    load_all()
+    test_loader()

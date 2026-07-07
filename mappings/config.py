@@ -7,7 +7,7 @@ MAPPINGS = {
         "posting_date": "Posting Date",
         "deadline": "Deadline",
         "url": "Lien de l'offre",
-        "description": None
+        "description": "Description"
     },
 
     "beta_mr": {
