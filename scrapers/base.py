@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any
 import os
 import json
+from pipeline.tasks import process_raw_file_task
 
 class BaseScraper(ABC):
     """
@@ -34,5 +35,8 @@ class BaseScraper(ABC):
         
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
+        
+        print(f"[{self.source_name}] Alerting Redis queue about new file...")
+        process_raw_file_task.delay(file_path, source_name=self.source_name)
             
         return file_path

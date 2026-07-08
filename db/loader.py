@@ -1,12 +1,9 @@
-from pipeline.normalizer import normalize
 from db.client import get_client
 
 
-def load_all(batch_size: int = 500):
+def load_all(records: list, batch_size: int = 500):
 
     supabase = get_client()
-
-    records = normalize()
 
     print(f"[✓] Total normalized records: {len(records)}")
 
@@ -34,7 +31,3 @@ def load_all(batch_size: int = 500):
         except Exception as e:
             print(f"[X] Batch failed {i//batch_size + 1}")
             print(e)
-
-
-if __name__ == "__main__":
-    load_all()
