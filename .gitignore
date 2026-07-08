@@ -6,7 +6,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
-# Ignore Python cache files
+s
 **/__pycache__/
 *.py[cod]
