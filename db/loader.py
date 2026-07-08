@@ -1,7 +1,7 @@
 from db.client import get_client
 
 
-def load_all(records: list, batch_size: int = 500):
+def load_all(records: list[dict], batch_size: int = 500):
 
     supabase = get_client()
 
