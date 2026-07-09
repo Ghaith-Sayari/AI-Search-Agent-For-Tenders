@@ -9,7 +9,7 @@ production database or enter the LLM qualification pipeline.
 See DATA_GOVERNANCE.md, Section 1.3 for the full specification.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 
 
@@ -49,9 +49,4 @@ class CanonicalOpportunity(BaseModel):
         if not v or not str(v).strip():
             raise ValueError("Field cannot be empty or blank whitespace")
         return str(v).strip()
-
-    class Config:
-        # Allows the model to be instantiated from ORM-like objects
-        # or dicts with extra keys silently ignored during mapping.
-        extra = "ignore"
-        str_strip_whitespace = True
+    model_config = ConfigDict(extra="ignore")
