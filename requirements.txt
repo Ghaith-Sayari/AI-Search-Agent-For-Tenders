@@ -1,4 +1,21 @@
-pyyaml==6.0.1
-requests==2.31.0
-beautifulsoup4==4.12.3
-mcp==0.1.0
+PyYAML==6.0.3
+requests==2.34.2
+beautifulsoup4==4.15.0
+
+# Scraping and asynchronous processing
+playwright==1.60.0
+celery==5.6.3
+kombu==5.6.2
+redis==8.0.1
+
+# Data validation and configuration
+pydantic==2.13.4
+python-dotenv==1.2.2
+
+# Database and semantic search
+supabase==2.31.0
+sentence-transformers==5.6.0
+
+# Tests
+pytest==9.1.1
+pytest-mock==3.15.1

@@ -21,7 +21,7 @@ def load_all(records: list[dict], batch_size: int = 500):
         try:
             res = (
                 supabase
-                .table("opportunity")
+                .table("raw_tender_staging")
                 .upsert(batch, on_conflict="unique_key")
                 .execute()
             )

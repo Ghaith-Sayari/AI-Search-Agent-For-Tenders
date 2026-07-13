@@ -15,17 +15,17 @@ def test_loader():
     supabase = get_client()
 
     # Count rows before running the pipeline
-    before = supabase.table("opportunity").select("id", count="exact").execute()
+    before = supabase.table("raw_tender_staging").select("id", count="exact").execute()
     before_count = before.count or 0
-    print(f"[i] Rows in opportunity table before: {before_count}")
+    print(f"[i] Rows in raw_tender_staging table before: {before_count}")
 
     # Run the real pipeline: normalize() -> upsert in batches
     load_all()
 
     # Count rows after
-    after = supabase.table("opportunity").select("id", count="exact").execute()
+    after = supabase.table("raw_tender_staging").select("id", count="exact").execute()
     after_count = after.count or 0
-    print(f"[i] Rows in opportunity table after: {after_count}")
+    print(f"[i] Rows in raw_tender_staging table after: {after_count}")
 
     if after_count >= before_count:
         print(f"[✓] Load succeeded — {after_count - before_count} new/updated rows reflected")
@@ -35,7 +35,7 @@ def test_loader():
     # Spot-check: pull a few rows to confirm shape looks right
     sample = (
         supabase
-        .table("opportunity")
+        .table("raw_tender_staging")
         .select("unique_key, source, title, created_at")
         .limit(5)
         .execute()
