@@ -27,7 +27,7 @@ class GatekeeperClassifier:
     def classify(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
         """Return one validated, auditable decision for a staging record."""
         completion = self.client.chat.completions.create(
-            model=self.settings.model,
+            model=self.settings.azure_openai_deployment_name,
             temperature=self.settings.temperature,
             messages=[
                 {"role": "system", "content": self.system_instructions},
@@ -60,14 +60,22 @@ class GatekeeperClassifier:
         )
 
     def _build_openai_client(self) -> Any:
-        """Import lazily so schema-only work does not require the API SDK."""
         try:
-            from openai import OpenAI
+            if self.settings.use_azure:
+                from openai import AzureOpenAI
+                return AzureOpenAI(
+                    api_key=self.settings.openai_api_key,
+                    azure_endpoint=self.settings.azure_endpoint,
+                    api_version=self.settings.api_version,
+                )
+            else:
+                from openai import OpenAI
+                return OpenAI(api_key=self.settings.openai_api_key)
         except ImportError as exc:
             raise ImportError(
-                "The 'openai' package is required. Install requirements.txt first."
+                "The 'openai' package is required to use the GatekeeperClassifier. "
+                "Please install it with 'pip install openai'."
             ) from exc
-        return OpenAI(api_key=self.settings.openai_api_key)
 
     @staticmethod
     def _build_record_message(record: RawTenderStagingRecord) -> str:
