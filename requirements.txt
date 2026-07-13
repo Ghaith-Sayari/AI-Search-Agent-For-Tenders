@@ -15,6 +15,7 @@ python-dotenv==1.2.2
 # Database and semantic search
 supabase==2.31.0
 sentence-transformers==5.6.0
+openai>=1.0.0,<3.0.0
 
 # Tests
 pytest==9.1.1

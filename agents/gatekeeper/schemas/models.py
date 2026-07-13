@@ -46,23 +46,18 @@ class RawTenderStagingRecord(BaseModel):
         return value
 
 
-class GatekeeperDecision(BaseModel):
-    """Structured, auditable outcome returned for one staging record."""
+class GatekeeperAssessment(BaseModel):
+    """The decision fields the LLM is permitted to produce."""
 
-    staging_tender_id: UUID
-    unique_key: str
     status: GatekeeperStatus
     confidence_score: float = Field(ge=0, le=1)
     decision_reason: str = Field(min_length=1)
     cleaned_description: Optional[str] = None
     extracted_deadline: Optional[date] = None
-    processed_at: datetime = Field(default_factory=datetime.utcnow)
-    policy_version: str = Field(min_length=1)
-    agent_version: str = Field(min_length=1)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("unique_key", "decision_reason", "policy_version", "agent_version")
+    @field_validator("decision_reason")
     @classmethod
     def strings_cannot_be_blank(cls, value: str) -> str:
         if not value:
@@ -70,7 +65,24 @@ class GatekeeperDecision(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def approved_tenders_require_a_deadline(self) -> "GatekeeperDecision":
+    def approved_tenders_require_a_deadline(self) -> "GatekeeperAssessment":
         if self.status is GatekeeperStatus.APPROVED and self.extracted_deadline is None:
             raise ValueError("Approved tenders require an extracted_deadline")
         return self
+
+
+class GatekeeperDecision(GatekeeperAssessment):
+    """Structured, auditable outcome returned for one staging record."""
+
+    staging_tender_id: UUID
+    unique_key: str
+    processed_at: datetime = Field(default_factory=datetime.utcnow)
+    policy_version: str = Field(min_length=1)
+    agent_version: str = Field(min_length=1)
+
+    @field_validator("unique_key", "policy_version", "agent_version")
+    @classmethod
+    def metadata_strings_cannot_be_blank(cls, value: str) -> str:
+        if not value:
+            raise ValueError("Field cannot be empty or blank")
+        return value
