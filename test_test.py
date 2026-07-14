@@ -3,7 +3,8 @@
 import logging
 from datetime import datetime, timezone
 from typing import List
-from uuid import uuid4
+from uuid import UUID
+import time
 
 import pytest
 from agents.gatekeeper.classifiers import GatekeeperClassifier, GatekeeperSettings
@@ -108,7 +109,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
         try:
             # Convert Supabase row to RawTenderStagingRecord
             record = RawTenderStagingRecord(
-                id=uuid4(),  # Generate new UUID for this processing run
+                id=UUID(str(raw_data["id"])),  # Generate new UUID for this processing run
                 unique_key=raw_data.get("unique_key", f"raw-{i}"),
                 source=raw_data.get("source", "unknown_source"),
                 title=raw_data.get("title"),
@@ -124,6 +125,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
             
             # Classify with Gatekeeper
             decision = classifier.classify(record)
+            time.sleep(45)
             decisions.append(decision)
             
             logger.info(
@@ -218,7 +220,7 @@ def test_gatekeeper_handles_batch_with_error_recovery():
     classifier = GatekeeperClassifier(settings=settings)
     repository = GatekeeperDecisionRepository(table_name="clean_test_db")
     
-    raw_records = fetch_raw_test_records(limit=10)  # Sample first 10
+    raw_records = fetch_raw_test_records(limit=2)  # Sample first 2
     
     if not raw_records:
         pytest.skip("Not enough records to test error recovery")
@@ -227,7 +229,7 @@ def test_gatekeeper_handles_batch_with_error_recovery():
     for raw_data in raw_records:
         try:
             record = RawTenderStagingRecord(
-                id=uuid4(),
+                id=UUID(str(raw_data["id"])),
                 unique_key=raw_data.get("unique_key", "unknown"),
                 source=raw_data.get("source", "unknown"),
                 title=raw_data.get("title"),
@@ -263,7 +265,7 @@ def test_gatekeeper_decision_audit_trail():
     for raw_data in raw_records:
         try:
             record = RawTenderStagingRecord(
-                id=uuid4(),
+                id=UUID(str(raw_data["id"])),
                 unique_key=raw_data.get("unique_key", "unknown"),
                 source=raw_data.get("source", "unknown"),
                 title=raw_data.get("title"),

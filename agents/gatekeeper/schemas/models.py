@@ -55,7 +55,7 @@ class GatekeeperAssessment(BaseModel):
     cleaned_description: Optional[str] = None
     extracted_deadline: Optional[date] = None
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     @field_validator("decision_reason")
     @classmethod

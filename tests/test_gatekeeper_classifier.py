@@ -5,13 +5,13 @@ from agents.gatekeeper.classifiers import GatekeeperClassifier, GatekeeperSettin
 from agents.gatekeeper.schemas import GatekeeperStatus, RawTenderStagingRecord
 
 
-class FakeCompletions:
-    def create(self, **_: object):
-        message = type(
-            "Message",
+class FakeModels:
+    def generate_content(self, **_: object):
+        return type(
+            "Response",
             (),
             {
-                "content": (
+                "text": (
                     '{"status":"approved","confidence_score":0.91,'
                     '"decision_reason":"Active procurement notice with a clear scope.",'
                     '"cleaned_description":"Road rehabilitation works.",'
@@ -19,20 +19,22 @@ class FakeCompletions:
                 )
             },
         )()
-        choice = type("Choice", (), {"message": message})()
-        return type("Completion", (), {"choices": [choice]})()
 
 
 class FakeClient:
-    chat = type("Chat", (), {"completions": FakeCompletions()})()
+    models = FakeModels()
 
 
 def test_classifier_returns_a_valid_auditable_decision():
     settings = GatekeeperSettings(
-        openai_api_key="test-key",
+        gemini_api_key="test-key",
         model="test-model",
     )
-    classifier = GatekeeperClassifier(settings=settings, client=FakeClient())
+    classifier = GatekeeperClassifier(
+        settings=settings,
+        client=FakeClient(),
+        generation_config={},
+    )
     record = RawTenderStagingRecord(
         id=uuid4(),
         unique_key="tender-123",

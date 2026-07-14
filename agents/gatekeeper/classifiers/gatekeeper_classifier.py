@@ -19,34 +19,29 @@ class GatekeeperClassifier:
         self,
         settings: GatekeeperSettings | None = None,
         client: Any | None = None,
+        generation_config: Any | None = None,
     ) -> None:
         self.settings = settings or GatekeeperSettings.from_env()
-        self.client = client or self._build_openai_client()
+        self.client = client or self._build_gemini_client()
+        self.generation_config = (
+            generation_config
+            if generation_config is not None
+            else self._structured_output_config()
+        )
         self.system_instructions = self._load_system_instructions()
 
     def classify(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
         """Return one validated, auditable decision for a staging record."""
-        completion = self.client.chat.completions.create(
-            model=self.settings.azure_openai_deployment_name,
-            temperature=self.settings.temperature,
-            messages=[
-                {"role": "system", "content": self.system_instructions},
-                {
-                    "role": "user",
-                    "content": self._build_record_message(record),
-                },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "gatekeeper_assessment",
-                    "strict": True,
-                    "schema": GatekeeperAssessment.model_json_schema(),
-                },
-            },
+        response = self.client.models.generate_content(
+            model=self.settings.model,
+            contents=(
+                f"{self.system_instructions}\n\n---\n\n"
+                f"{self._build_record_message(record)}"
+            ),
+            config=self.generation_config,
         )
 
-        content = completion.choices[0].message.content
+        content = response.text
         if not content:
             raise RuntimeError("The Gatekeeper model returned an empty response")
 
@@ -59,23 +54,30 @@ class GatekeeperClassifier:
             **assessment.model_dump(),
         )
 
-    def _build_openai_client(self) -> Any:
+    def _build_gemini_client(self) -> Any:
         try:
-            if self.settings.use_azure:
-                from openai import AzureOpenAI
-                return AzureOpenAI(
-                    api_key=self.settings.openai_api_key,
-                    azure_endpoint=self.settings.azure_endpoint,
-                    api_version=self.settings.api_version,
-                )
-            else:
-                from openai import OpenAI
-                return OpenAI(api_key=self.settings.openai_api_key)
+            from google import genai
         except ImportError as exc:
             raise ImportError(
-                "The 'openai' package is required to use the GatekeeperClassifier. "
-                "Please install it with 'pip install openai'."
+                "The 'google-genai' package is required to use the GatekeeperClassifier. "
+                "Please install it with 'pip install google-genai'."
             ) from exc
+        return genai.Client(api_key=self.settings.gemini_api_key)
+
+    def _structured_output_config(self) -> Any:
+        """Build Gemini's Pydantic-backed JSON structured-output configuration."""
+        try:
+            from google.genai import types
+        except ImportError as exc:
+            raise ImportError(
+                "The 'google-genai' package is required. Install requirements.txt first."
+            ) from exc
+
+        return types.GenerateContentConfig(
+            temperature=self.settings.temperature,
+            response_mime_type="application/json",
+            response_schema=GatekeeperAssessment,
+        )
 
     @staticmethod
     def _build_record_message(record: RawTenderStagingRecord) -> str:

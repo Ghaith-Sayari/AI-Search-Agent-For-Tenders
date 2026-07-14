@@ -17,7 +17,7 @@ class GatekeeperDecisionRepository:
         response = (
             get_client()
             .table(self.table_name)
-            .insert(decision.model_dump(mode="json"))
+            .upsert(decision.model_dump(mode="json"),on_conflict="unique_key")
             .execute()
         )
 
