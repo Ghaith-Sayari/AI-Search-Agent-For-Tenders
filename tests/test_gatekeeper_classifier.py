@@ -1,52 +1,101 @@
-from datetime import datetime, timezone
+﻿from datetime import datetime, timezone
 from uuid import uuid4
 
-from agents.gatekeeper.classifiers import GatekeeperClassifier, GatekeeperSettings
+import pytest
+
+from agents.gatekeeper.classifiers.gatekeeper_classifier import GatekeeperClassifier
+from agents.gatekeeper.classifiers.settings import GatekeeperSettings
 from agents.gatekeeper.schemas import GatekeeperStatus, RawTenderStagingRecord
 
 
-class FakeModels:
-    def generate_content(self, **_: object):
-        return type(
-            "Response",
-            (),
-            {
-                "text": (
-                    '{"status":"approved","confidence_score":0.91,'
-                    '"decision_reason":"Active procurement notice with a clear scope.",'
-                    '"cleaned_description":"Road rehabilitation works.",'
-                    '"extracted_deadline":"2026-08-01"}'
-                )
-            },
-        )()
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
 
 
-class FakeClient:
-    models = FakeModels()
+class _FakeHttpClient:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def post(self, url, json, timeout):
+        self.calls.append({"url": url, "json": json, "timeout": timeout})
+        return _FakeResponse(self.payload)
 
 
-def test_classifier_returns_a_valid_auditable_decision():
-    settings = GatekeeperSettings(
-        gemini_api_key="test-key",
-        model="test-model",
-    )
-    classifier = GatekeeperClassifier(
-        settings=settings,
-        client=FakeClient(),
-        generation_config={},
-    )
-    record = RawTenderStagingRecord(
+def _record():
+    return RawTenderStagingRecord(
         id=uuid4(),
-        unique_key="tender-123",
-        source="example",
-        title="Road rehabilitation",
-        description="Tender notice for road rehabilitation works.",
+        unique_key="raw-1",
+        source="portal-a",
+        title="Cloud migration tender",
+        description="description",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
 
-    decision = classifier.classify(record)
 
-    assert decision.status is GatekeeperStatus.APPROVED
-    assert decision.staging_tender_id == record.id
-    assert decision.unique_key == record.unique_key
+def _settings():
+    return GatekeeperSettings(
+        model="test-model",
+        ollama_base_url="http://localhost:11434",
+        policy_version="1.0",
+        agent_version="1.0",
+        temperature=0.0,
+        audit_table="gatekeeper_decisions",
+    )
+
+
+def test_classify_posts_expected_payload_and_returns_decision(monkeypatch):
+    fake_client = _FakeHttpClient(
+        {
+            "message": {
+                "content": '{"status":"needs_review","confidence_score":0.71,"decision_reason":"insufficient details"}'
+            }
+        }
+    )
+
+    monkeypatch.setattr(
+        GatekeeperClassifier,
+        "_load_system_instructions",
+        staticmethod(lambda: "SYSTEM"),
+    )
+
+    classifier = GatekeeperClassifier(settings=_settings(), client=fake_client)
+    decision = classifier.classify(_record())
+
+    assert decision.status == GatekeeperStatus.NEEDS_REVIEW
+    assert decision.policy_version == "1.0"
+    assert len(fake_client.calls) == 1
+    call = fake_client.calls[0]
+    assert call["url"] == "http://localhost:11434/api/chat"
+    assert call["timeout"] == 30
+    assert call["json"]["messages"][0]["content"] == "SYSTEM"
+
+
+def test_classify_raises_when_model_returns_empty_content(monkeypatch):
+    fake_client = _FakeHttpClient({"message": {"content": ""}})
+    monkeypatch.setattr(
+        GatekeeperClassifier,
+        "_load_system_instructions",
+        staticmethod(lambda: "SYSTEM"),
+    )
+
+    classifier = GatekeeperClassifier(settings=_settings(), client=fake_client)
+
+    with pytest.raises(RuntimeError, match="empty response"):
+        classifier.classify(_record())
+
+
+def test_build_record_message_excludes_internal_timestamps():
+    message = GatekeeperClassifier._build_record_message(_record())
+
+    assert "created_at" not in message
+    assert "updated_at" not in message
+    assert "raw-1" in message

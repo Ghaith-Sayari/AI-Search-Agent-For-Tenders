@@ -1,4 +1,4 @@
-# tests/test_gatekeeper_end_to_end.py
+﻿# tests/test_gatekeeper_end_to_end.py
 
 import logging
 from datetime import datetime, timezone
@@ -80,7 +80,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
     """
     # ==================== SETUP ====================
     logger.info("=" * 60)
-    logger.info("GATEKEEPER END-TO-END TEST: raw_test_db → clean_test_db")
+    logger.info("GATEKEEPER END-TO-END TEST: raw_test_db â†’ clean_test_db")
     logger.info("=" * 60)
     
     # Initialize classifier with environment settings
@@ -97,7 +97,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
     if not raw_records:
         pytest.skip("No records in raw_test_db to process")
     
-    logger.info(f"✓ Loaded {len(raw_records)} raw tender records")
+    logger.info(f"âœ“ Loaded {len(raw_records)} raw tender records")
     
     # ==================== PROCESS ====================
     logger.info("\n[2] Processing records through Gatekeeper classifier...")
@@ -129,7 +129,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
             decisions.append(decision)
             
             logger.info(
-                f"  [{i:3d}/{len(raw_records)}] {record.unique_key:30s} → "
+                f"  [{i:3d}/{len(raw_records)}] {record.unique_key:30s} â†’ "
                 f"{decision.status.value:15s} (confidence: {decision.confidence_score:.2f})"
             )
             
@@ -143,7 +143,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
             errors.append(error_entry)
             logger.error(
                 f"  [{i:3d}/{len(raw_records)}] {raw_data.get('unique_key', 'unknown'):30s} "
-                f"→ ERROR: {type(e).__name__}: {e}"
+                f"â†’ ERROR: {type(e).__name__}: {e}"
             )
     
     # ==================== SAVE ====================
@@ -156,7 +156,7 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
         try:
             saved_row = save_gatekeeper_decision(decision, repository)
             saved_count += 1
-            logger.debug(f"  ✓ Saved decision for {decision.unique_key}")
+            logger.debug(f"  âœ“ Saved decision for {decision.unique_key}")
         except Exception as e:
             save_error = {
                 "unique_key": decision.unique_key,
@@ -164,9 +164,9 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
                 "error_type": type(e).__name__,
             }
             save_errors.append(save_error)
-            logger.error(f"  ✗ Failed to save decision for {decision.unique_key}: {e}")
+            logger.error(f"  âœ— Failed to save decision for {decision.unique_key}: {e}")
     
-    logger.info(f"✓ Saved {saved_count}/{len(decisions)} decisions to clean_test_db")
+    logger.info(f"âœ“ Saved {saved_count}/{len(decisions)} decisions to clean_test_db")
     
     # ==================== SUMMARY ====================
     logger.info("\n[4] Processing Summary:")
@@ -210,22 +210,26 @@ def test_gatekeeper_processes_raw_test_db_and_saves_to_clean_test_db():
 def test_gatekeeper_handles_batch_with_error_recovery():
     """
     Robustness test: Verify that partial failures don't stop the entire batch.
-    
+
     This test processes raw_test_db but continues even if individual records fail,
     ensuring batch resilience.
     """
     logger.info("\n[Robustness Test] Processing with error recovery...")
-    
+
     settings = GatekeeperSettings.from_env()
     classifier = GatekeeperClassifier(settings=settings)
     repository = GatekeeperDecisionRepository(table_name="clean_test_db")
-    
+
     raw_records = fetch_raw_test_records(limit=2)  # Sample first 2
-    
+
     if not raw_records:
         pytest.skip("Not enough records to test error recovery")
-    
-    processed = 0
+
+    classified = 0
+    saved = 0
+    classification_errors = 0
+    save_errors = 0
+
     for raw_data in raw_records:
         try:
             record = RawTenderStagingRecord(
@@ -238,15 +242,26 @@ def test_gatekeeper_handles_batch_with_error_recovery():
                 updated_at=datetime.now(timezone.utc),
             )
             decision = classifier.classify(record)
-            save_gatekeeper_decision(decision, repository)
-            processed += 1
+            classified += 1
         except Exception as e:
-            logger.warning(f"Skipping record due to error: {e}")
+            classification_errors += 1
+            logger.warning(f"Skipping record due to classification error: {e}")
             continue
-    
-    logger.info(f"✓ Successfully processed {processed}/{len(raw_records)} records with error recovery")
-    assert processed > 0, "Should process at least some records"
 
+        try:
+            save_gatekeeper_decision(decision, repository)
+            saved += 1
+        except Exception as e:
+            save_errors += 1
+            logger.warning(f"Skipping record due to save error: {e}")
+            continue
+
+    logger.info(
+        f"✓ Error recovery summary: total={len(raw_records)}, "
+        f"classified={classified}, saved={saved}, "
+        f"classification_errors={classification_errors}, save_errors={save_errors}"
+    )
+    assert classified > 0, "Should classify at least some records"
 
 def test_gatekeeper_decision_audit_trail():
     """
@@ -284,9 +299,9 @@ def test_gatekeeper_decision_audit_trail():
             assert decision.decision_reason  # Non-empty reason
             assert 0 <= decision.confidence_score <= 1
             
-            logger.info(f"✓ {record.unique_key}: Audit trail verified")
+            logger.info(f"âœ“ {record.unique_key}: Audit trail verified")
         except Exception as e:
-            logger.error(f"✗ Audit trail check failed: {e}")
+            logger.error(f"âœ— Audit trail check failed: {e}")
             raise
 
 

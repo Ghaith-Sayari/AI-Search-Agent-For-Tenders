@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Any
+import requests
 
 from agents.gatekeeper.classifiers.settings import GatekeeperSettings
 from agents.gatekeeper.schemas import (
@@ -19,29 +20,32 @@ class GatekeeperClassifier:
         self,
         settings: GatekeeperSettings | None = None,
         client: Any | None = None,
-        generation_config: Any | None = None,
     ) -> None:
         self.settings = settings or GatekeeperSettings.from_env()
-        self.client = client or self._build_gemini_client()
-        self.generation_config = (
-            generation_config
-            if generation_config is not None
-            else self._structured_output_config()
-        )
+        self.client = client or requests.Session()
         self.system_instructions = self._load_system_instructions()
 
     def classify(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
-        """Return one validated, auditable decision for a staging record."""
-        response = self.client.models.generate_content(
-            model=self.settings.model,
-            contents=(
-                f"{self.system_instructions}\n\n---\n\n"
-                f"{self._build_record_message(record)}"
-            ),
-            config=self.generation_config,
+        response = self.client.post(
+            f"{self.settings.ollama_base_url}/api/chat",
+            json={
+                "model": self.settings.model,
+                "stream": False,
+                "format": GatekeeperAssessment.model_json_schema(),
+                "options": {"temperature": self.settings.temperature},
+                "messages": [
+                    {"role": "system", "content": self.system_instructions},
+                    {
+                    "role": "user",
+                        "content": self._build_record_message(record),
+                    },
+                ],
+                
+            },
+            timeout=30,
         )
-
-        content = response.text
+        response.raise_for_status()
+        content = response.json().get("message", {}).get("content")
         if not content:
             raise RuntimeError("The Gatekeeper model returned an empty response")
 
@@ -52,31 +56,6 @@ class GatekeeperClassifier:
             policy_version=self.settings.policy_version,
             agent_version=self.settings.agent_version,
             **assessment.model_dump(),
-        )
-
-    def _build_gemini_client(self) -> Any:
-        try:
-            from google import genai
-        except ImportError as exc:
-            raise ImportError(
-                "The 'google-genai' package is required to use the GatekeeperClassifier. "
-                "Please install it with 'pip install google-genai'."
-            ) from exc
-        return genai.Client(api_key=self.settings.gemini_api_key)
-
-    def _structured_output_config(self) -> Any:
-        """Build Gemini's Pydantic-backed JSON structured-output configuration."""
-        try:
-            from google.genai import types
-        except ImportError as exc:
-            raise ImportError(
-                "The 'google-genai' package is required. Install requirements.txt first."
-            ) from exc
-
-        return types.GenerateContentConfig(
-            temperature=self.settings.temperature,
-            response_mime_type="application/json",
-            response_schema=GatekeeperAssessment,
         )
 
     @staticmethod
