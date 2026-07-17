@@ -12,6 +12,7 @@ import requests
 from pydantic import ValidationError
 
 from agents.gatekeeper.classifiers.settings import GatekeeperSettings
+from agents.gatekeeper.observability import configure_langsmith, traceable
 from agents.gatekeeper.schemas import (
     GatekeeperAssessment,
     GatekeeperDecision,
@@ -30,27 +31,16 @@ class GatekeeperClassifier:
     ) -> None:
         self.settings = settings or GatekeeperSettings.from_env()
         self.client = client or requests.Session()
+        configure_langsmith(self.settings)
         self.system_instructions = self._load_system_instructions()
 
+    @traceable(name="gatekeeper.classify", run_type="chain")
     def classify(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
-        response = self.client.post(
-            f"{self.settings.ollama_base_url}/api/chat",
-            json={
-                "model": self.settings.model,
-                "stream": False,
-                "format": self._ollama_format_schema(),
-                "options": {"temperature": self.settings.temperature},
-                "messages": [
-                    {"role": "system", "content": self.system_instructions},
-                    {
-                    "role": "user",
-                        "content": self._build_record_message(record),
-                    },
-                ],
-                
-            },
-            timeout=30,
-        )
+        """Classify one staging record with policy-aware model prompts."""
+        return self._classify_impl(record)
+
+    def _classify_impl(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
+        response = self._invoke_model(record)
         response.raise_for_status()
         content = response.json().get("message", {}).get("content")
         if not content:
@@ -73,6 +63,28 @@ class GatekeeperClassifier:
             return self._build_decision_from_assessment(record, assessment)
         except ValidationError as e:
             return self._build_needs_review_fallback(record, repaired_payload, e)
+
+    @traceable(name="gatekeeper.ollama_chat", run_type="llm")
+    def _invoke_model(self, record: RawTenderStagingRecord) -> Any:
+        response = self.client.post(
+            f"{self.settings.ollama_base_url}/api/chat",
+            json={
+                "model": self.settings.model,
+                "stream": False,
+                "format": self._ollama_format_schema(),
+                "options": {"temperature": self.settings.temperature},
+                "messages": [
+                    {"role": "system", "content": self.system_instructions},
+                    {
+                    "role": "user",
+                        "content": self._build_record_message(record),
+                    },
+                ],
+                
+            },
+            timeout=30,
+        )
+        return response
 
     def _build_decision_from_assessment(
         self,

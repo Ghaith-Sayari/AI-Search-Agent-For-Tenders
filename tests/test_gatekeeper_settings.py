@@ -18,6 +18,10 @@ def test_from_env_builds_settings_and_trims_base_url(monkeypatch):
     monkeypatch.setenv("GATEKEEPER_AGENT_VERSION", "2.2")
     monkeypatch.setenv("GATEKEEPER_TEMPERATURE", "0.4")
     monkeypatch.setenv("GATEKEEPER_AUDIT_TABLE", "clean_test_db")
+    monkeypatch.setenv("GATEKEEPER_LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("GATEKEEPER_LANGSMITH_PROJECT", "gatekeeper-observability")
+    monkeypatch.setenv("GATEKEEPER_LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
+    monkeypatch.setenv("GATEKEEPER_LANGSMITH_API_KEY", "test-key")
 
     settings = GatekeeperSettings.from_env()
 
@@ -27,3 +31,7 @@ def test_from_env_builds_settings_and_trims_base_url(monkeypatch):
     assert settings.agent_version == "2.2"
     assert settings.temperature == 0.4
     assert settings.audit_table == "clean_test_db"
+    assert settings.langsmith_tracing is True
+    assert settings.langsmith_project == "gatekeeper-observability"
+    assert settings.langsmith_endpoint == "https://api.smith.langchain.com"
+    assert settings.langsmith_api_key == "test-key"

@@ -11,6 +11,7 @@ redis==8.0.1
 # Data validation and configuration
 pydantic==2.13.4
 python-dotenv==1.2.2
+langsmith==0.4.14
 
 # Database and semantic search
 supabase==2.31.0

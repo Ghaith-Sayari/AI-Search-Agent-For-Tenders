@@ -6,6 +6,7 @@ import time
 
 from agents.gatekeeper.classifiers import GatekeeperClassifier, GatekeeperSettings
 from agents.gatekeeper.audit.decision_repository import GatekeeperDecisionRepository
+from agents.gatekeeper.observability import configure_langsmith, traceable
 from agents.gatekeeper.schemas import RawTenderStagingRecord, GatekeeperStatus
 from agents.gatekeeper.routing import ProductionTenderPublisher
 from db.client import get_client
@@ -33,6 +34,7 @@ class GatekeeperPipeline:
         self.source_table = source_table
         self.audit_table = audit_table
         self.production_table = production_table
+        configure_langsmith(self.classifier.settings)
         
         self.audit_repository = GatekeeperDecisionRepository(table_name=audit_table)
         self.production_publisher = (
@@ -60,6 +62,7 @@ class GatekeeperPipeline:
             return []
         return response.data
 
+    @traceable(name="gatekeeper.pipeline.run", run_type="chain")
     def run(self, limit: Optional[int] = None, continue_on_error: bool = True) -> Dict[str, Any]:
         """
         Run the gatekeeper pipeline.

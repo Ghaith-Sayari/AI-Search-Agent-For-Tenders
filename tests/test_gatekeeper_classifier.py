@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 from uuid import uuid4
 
 import pytest
@@ -57,6 +58,20 @@ def _settings():
         agent_version="1.0",
         temperature=0.0,
         audit_table="gatekeeper_decisions",
+    )
+
+def _settings_with_langsmith():
+    return GatekeeperSettings(
+        model="test-model",
+        ollama_base_url="http://localhost:11434",
+        policy_version="1.0",
+        agent_version="1.0",
+        temperature=0.0,
+        audit_table="gatekeeper_decisions",
+        langsmith_tracing=True,
+        langsmith_project="gatekeeper-observability",
+        langsmith_endpoint="https://api.smith.langchain.com",
+        langsmith_api_key="test-key",
     )
 
 
@@ -160,4 +175,23 @@ def test_classify_demotes_to_needs_review_when_approved_missing_deadline_and_no_
     assert decision.status == GatekeeperStatus.NEEDS_REVIEW
     assert decision.extracted_deadline is None
     assert decision.cleaned_description == "Cloud migration tender"
+
+
+def test_classifier_configures_langsmith_env_when_enabled(monkeypatch):
+    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+    monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
+    monkeypatch.delenv("LANGSMITH_ENDPOINT", raising=False)
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    monkeypatch.setattr(
+        GatekeeperClassifier,
+        "_load_system_instructions",
+        staticmethod(lambda: "SYSTEM"),
+    )
+
+    GatekeeperClassifier(settings=_settings_with_langsmith(), client=_FakeHttpClient({"message": {"content": "{}"}}))
+
+    assert os.getenv("LANGSMITH_TRACING") == "true"
+    assert os.getenv("LANGSMITH_PROJECT") == "gatekeeper-observability"
+    assert os.getenv("LANGSMITH_ENDPOINT") == "https://api.smith.langchain.com"
+    assert os.getenv("LANGSMITH_API_KEY") == "test-key"
 
