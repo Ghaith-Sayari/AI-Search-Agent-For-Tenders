@@ -45,6 +45,8 @@ def _decision():
         status=GatekeeperStatus.REJECTED,
         confidence_score=0.2,
         decision_reason="spam/junk",
+        cleaned_description=None,
+        extracted_deadline=None,
         staging_tender_id=uuid4(),
         unique_key="raw-2",
         policy_version="1.0",

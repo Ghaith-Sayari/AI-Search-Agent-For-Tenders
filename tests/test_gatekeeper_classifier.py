@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -6,6 +6,13 @@ import pytest
 from agents.gatekeeper.classifiers.gatekeeper_classifier import GatekeeperClassifier
 from agents.gatekeeper.classifiers.settings import GatekeeperSettings
 from agents.gatekeeper.schemas import GatekeeperStatus, RawTenderStagingRecord
+
+RAW_OUTPUT_APPROVED_MISSING_DEADLINE_KEY = (
+    '{"status":"approved","confidence_score":0.95,"decision_reason":"valid tender","cleaned_description":"Cloud migration tender"}'
+)
+RAW_OUTPUT_APPROVED_NULL_CLEAN_DESC_AND_DEADLINE = (
+    '{"status":"approved","confidence_score":0.95,"decision_reason":"valid tender","cleaned_description":null,"extracted_deadline":null}'
+)
 
 
 class _FakeResponse:
@@ -36,6 +43,7 @@ def _record():
         source="portal-a",
         title="Cloud migration tender",
         description="description",
+        deadline="24 juil. 2026",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
@@ -77,6 +85,7 @@ def test_classify_posts_expected_payload_and_returns_decision(monkeypatch):
     assert call["url"] == "http://localhost:11434/api/chat"
     assert call["timeout"] == 30
     assert call["json"]["messages"][0]["content"] == "SYSTEM"
+    assert call["json"]["format"] == classifier._ollama_format_schema()
 
 
 def test_classify_raises_when_model_returns_empty_content(monkeypatch):
@@ -99,3 +108,56 @@ def test_build_record_message_excludes_internal_timestamps():
     assert "created_at" not in message
     assert "updated_at" not in message
     assert "raw-1" in message
+
+
+@pytest.mark.parametrize(
+    "raw_content",
+    [
+        RAW_OUTPUT_APPROVED_MISSING_DEADLINE_KEY,
+        RAW_OUTPUT_APPROVED_NULL_CLEAN_DESC_AND_DEADLINE,
+    ],
+)
+def test_classify_repairs_approved_outputs_with_missing_deadline(monkeypatch, raw_content):
+    fake_client = _FakeHttpClient(
+        {
+            "message": {
+                "content": raw_content
+            }
+        }
+    )
+
+    monkeypatch.setattr(
+        GatekeeperClassifier,
+        "_load_system_instructions",
+        staticmethod(lambda: "SYSTEM"),
+    )
+
+    classifier = GatekeeperClassifier(settings=_settings(), client=fake_client)
+    decision = classifier.classify(_record())
+
+    assert decision.status == GatekeeperStatus.APPROVED
+    assert decision.extracted_deadline is not None
+    assert decision.extracted_deadline.isoformat() == "2026-07-24"
+
+
+def test_classify_demotes_to_needs_review_when_approved_missing_deadline_and_no_metadata(monkeypatch):
+    fake_client = _FakeHttpClient(
+        {
+            "message": {
+                "content": RAW_OUTPUT_APPROVED_MISSING_DEADLINE_KEY
+            }
+        }
+    )
+    monkeypatch.setattr(
+        GatekeeperClassifier,
+        "_load_system_instructions",
+        staticmethod(lambda: "SYSTEM"),
+    )
+    record = _record().model_copy(update={"deadline": None, "description": "desc"})
+    classifier = GatekeeperClassifier(settings=_settings(), client=fake_client)
+    decision = classifier.classify(record)
+
+    assert decision.status == GatekeeperStatus.NEEDS_REVIEW
+    assert decision.extracted_deadline is None
+    assert decision.cleaned_description == "Cloud migration tender"
+

@@ -41,7 +41,7 @@ class ProductionTenderPublisher:
             "url": record.url,
             "description": decision.cleaned_description,
             "external_id": record.external_id,
-            "staging_tender_id": record.id,
+            "staging_tender_id": str(record.id),
             "gatekeeper_decision_id": str(gatekeeper_decision_id)
             if gatekeeper_decision_id
             else None,

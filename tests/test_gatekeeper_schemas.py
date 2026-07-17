@@ -48,7 +48,20 @@ def test_gatekeeper_assessment_approved_requires_deadline():
             status=GatekeeperStatus.APPROVED,
             confidence_score=0.9,
             decision_reason="Looks valid",
+            cleaned_description="Clear tender scope",
             extracted_deadline=None,
+        )
+
+
+@pytest.mark.parametrize("status", [GatekeeperStatus.APPROVED, GatekeeperStatus.NEEDS_REVIEW])
+def test_gatekeeper_assessment_approved_and_needs_review_require_cleaned_description(status):
+    with pytest.raises(ValueError, match="cleaned_description"):
+        GatekeeperAssessment(
+            status=status,
+            confidence_score=0.9,
+            decision_reason="Looks valid",
+            cleaned_description=None,
+            extracted_deadline="2026-08-01" if status is GatekeeperStatus.APPROVED else None,
         )
 
 
@@ -57,6 +70,8 @@ def test_gatekeeper_decision_contains_audit_metadata_from_reference_flow():
         status=GatekeeperStatus.NEEDS_REVIEW,
         confidence_score=0.55,
         decision_reason="Need human validation",
+        cleaned_description="Need human validation",
+        extracted_deadline=None,
         staging_tender_id=uuid4(),
         unique_key="raw-10",
         policy_version="1.2",

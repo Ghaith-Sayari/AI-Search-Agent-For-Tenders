@@ -1,6 +1,6 @@
 """Pydantic contracts between raw tender staging and the Gatekeeper."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID
@@ -52,8 +52,8 @@ class GatekeeperAssessment(BaseModel):
     status: GatekeeperStatus
     confidence_score: float = Field(ge=0, le=1)
     decision_reason: str = Field(min_length=1)
-    cleaned_description: Optional[str] = None
-    extracted_deadline: Optional[date] = None
+    cleaned_description: Optional[str]
+    extracted_deadline: Optional[date]
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -68,6 +68,8 @@ class GatekeeperAssessment(BaseModel):
     def approved_tenders_require_a_deadline(self) -> "GatekeeperAssessment":
         if self.status is GatekeeperStatus.APPROVED and self.extracted_deadline is None:
             raise ValueError("Approved tenders require an extracted_deadline")
+        if self.status in {GatekeeperStatus.APPROVED, GatekeeperStatus.NEEDS_REVIEW} and not self.cleaned_description:
+            raise ValueError("Approved and needs_review tenders require a cleaned_description")
         return self
 
 
@@ -76,7 +78,7 @@ class GatekeeperDecision(GatekeeperAssessment):
 
     staging_tender_id: UUID
     unique_key: str
-    processed_at: datetime = Field(default_factory=datetime.utcnow)
+    processed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     policy_version: str = Field(min_length=1)
     agent_version: str = Field(min_length=1)
 
