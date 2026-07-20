@@ -22,10 +22,12 @@ class _FakeExecutor:
 class _FakeTable:
     def __init__(self, returned):
         self.returned = returned
-        self.insert_payload = None
+        self.upsert_payload = None
+        self.on_conflict = None
 
-    def insert(self, payload):
-        self.insert_payload = payload
+    def upsert(self, payload, on_conflict=None):
+        self.upsert_payload = payload
+        self.on_conflict = on_conflict
         return _FakeExecutor(self.returned)
 
 
@@ -54,7 +56,7 @@ def _decision():
     )
 
 
-def test_save_inserts_decision_and_returns_first_saved_row(monkeypatch):
+def test_save_upserts_decision_and_returns_first_saved_row(monkeypatch):
     fake_client = _FakeClient([{"unique_key": "raw-2", "status": "rejected"}])
     monkeypatch.setattr(
         "agents.gatekeeper.audit.decision_repository.get_client",
@@ -65,7 +67,8 @@ def test_save_inserts_decision_and_returns_first_saved_row(monkeypatch):
     row = repo.save(_decision())
 
     assert fake_client.requested_table == "clean_test_db"
-    assert fake_client.table_obj.insert_payload["unique_key"] == "raw-2"
+    assert fake_client.table_obj.upsert_payload["unique_key"] == "raw-2"
+    assert fake_client.table_obj.on_conflict == "unique_key,policy_version"
     assert row["status"] == "rejected"
 
 

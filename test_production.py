@@ -37,11 +37,25 @@ def test_production_pipeline_first_4_records():
     source_table = os.environ.get("PROD_SOURCE_TABLE", "raw_tender_staging")
     audit_table = os.environ.get("PROD_AUDIT_TABLE", "gatekeeper_decisions")
     production_table = os.environ.get("PROD_TARGET_TABLE", "production_tender")
+    dead_letter_table = os.environ.get("PROD_DEAD_LETTER_TABLE", "gatekeeper_dead_letter")
+    enable_dead_letter = os.environ.get("GATEKEEPER_ENABLE_DEAD_LETTER", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    max_workers = int(os.environ.get("GATEKEEPER_MAX_WORKERS", "4"))
+    classify_retries = int(os.environ.get("GATEKEEPER_CLASSIFY_MAX_RETRIES", "3"))
+    retry_backoff = float(os.environ.get("GATEKEEPER_RETRY_BACKOFF_SECONDS", "1.0"))
     
     logger.info(f"Configuration:")
     logger.info(f"  Source Table:     {source_table}")
     logger.info(f"  Audit Table:      {audit_table}")
     logger.info(f"  Production Table: {production_table}")
+    logger.info(f"  Dead Letter Table:{dead_letter_table} (enabled={enable_dead_letter})")
+    logger.info(f"  Max Workers:      {max_workers}")
+    logger.info(f"  Classify Retries: {classify_retries}")
+    logger.info(f"  Retry Backoff(s): {retry_backoff}")
     
     # Initialize classifier
     settings = GatekeeperSettings.from_env()
@@ -52,7 +66,12 @@ def test_production_pipeline_first_4_records():
         classifier=classifier,
         source_table=source_table,
         audit_table=audit_table,
-        production_table=production_table
+        production_table=production_table,
+        dead_letter_table=dead_letter_table,
+        enable_dead_letter=enable_dead_letter,
+        max_workers=max_workers,
+        classify_max_retries=classify_retries,
+        retry_backoff_seconds=retry_backoff,
     )
     
     # Run the pipeline with limit=4
@@ -69,6 +88,7 @@ def test_production_pipeline_first_4_records():
     logger.info(f"  Saved to Audit Table:      {summary['saved_audit']}/{summary['processed']}")
     logger.info(f"  Saved to Prod Table:       {summary['saved_prod']}")
     logger.info(f"  Save errors:               {summary['save_errors']}")
+    logger.info(f"  Sent to DLQ:               {summary.get('dlq_count', 0)}")
 
     if summary.get("approved_keys"):
         logger.info("\n[3] Approved keys:")
@@ -93,6 +113,11 @@ def test_production_pipeline_first_4_records():
     if summary.get("save_error_details"):
         logger.info("\n[7] Save error details:")
         for err in summary["save_error_details"]:
+            logger.info(f"  - {err}")
+
+    if summary.get("dlq_errors"):
+        logger.info("\n[7b] DLQ routing errors:")
+        for err in summary["dlq_errors"]:
             logger.info(f"  - {err}")
 
     if summary.get("decisions"):

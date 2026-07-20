@@ -13,11 +13,14 @@ class GatekeeperDecisionRepository:
         self.table_name = table_name
 
     def save(self, decision: GatekeeperDecision) -> dict[str, Any]:
-        """Insert one immutable audit event and return the saved row."""
+        """Upsert one audit event and return the saved row."""
         response = (
             get_client()
             .table(self.table_name)
-            .insert(decision.model_dump(mode="json"))
+            .upsert(
+                decision.model_dump(mode="json"),
+                on_conflict="unique_key,policy_version",
+            )
             .execute()
         )
 
