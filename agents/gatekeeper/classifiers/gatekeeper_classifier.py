@@ -5,7 +5,7 @@ import re
 import unicodedata
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 
@@ -23,6 +23,8 @@ from agents.gatekeeper.schemas import (
 
 class GatekeeperClassifier:
     """Loads Gatekeeper policy documents and applies them to one staging row."""
+    _SYSTEM_INSTRUCTIONS_CACHE: ClassVar[str | None] = None
+    _OLLAMA_SCHEMA_CACHE: ClassVar[dict[str, Any] | None] = None
 
     def __init__(
         self,
@@ -32,7 +34,7 @@ class GatekeeperClassifier:
         self.settings = settings or GatekeeperSettings.from_env()
         self.client = client or requests.Session()
         configure_langsmith(self.settings)
-        self.system_instructions = self._load_system_instructions()
+        self.system_instructions = self._get_system_instructions()
 
     @traceable(name="gatekeeper.classify", run_type="chain")
     def classify(self, record: RawTenderStagingRecord) -> GatekeeperDecision:
@@ -252,7 +254,9 @@ class GatekeeperClassifier:
 
     @staticmethod
     def _ollama_format_schema() -> dict[str, Any]:
-        return GatekeeperAssessment.model_json_schema()
+        if GatekeeperClassifier._OLLAMA_SCHEMA_CACHE is None:
+            GatekeeperClassifier._OLLAMA_SCHEMA_CACHE = GatekeeperAssessment.model_json_schema()
+        return GatekeeperClassifier._OLLAMA_SCHEMA_CACHE
 
     @staticmethod
     def _build_record_message(record: RawTenderStagingRecord) -> str:
@@ -272,3 +276,9 @@ class GatekeeperClassifier:
         documents = [instruction_path.read_text(encoding="utf-8")]
         documents.extend(path.read_text(encoding="utf-8") for path in policy_paths)
         return "\n\n---\n\n".join(documents)
+
+    @classmethod
+    def _get_system_instructions(cls) -> str:
+        if cls._SYSTEM_INSTRUCTIONS_CACHE is None:
+            cls._SYSTEM_INSTRUCTIONS_CACHE = cls._load_system_instructions()
+        return cls._SYSTEM_INSTRUCTIONS_CACHE

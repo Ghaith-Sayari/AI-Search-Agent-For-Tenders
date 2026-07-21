@@ -1,0 +1,41 @@
+version: "1.0.0"
+
+scoring:
+  range:
+    min: 0
+    max: 100
+  weights:
+    domain_relevance: 0.35
+    geography_fit: 0.20
+    budget_fit: 0.20
+    eligibility_fit: 0.15
+    strategic_fit: 0.10
+
+thresholds:
+  good_fit_min: 75
+  needs_review_min: 50
+  not_fit_max: 49.99
+
+confidence:
+  default: 0.75
+  min_for_auto_decision: 0.65
+
+risk:
+  default_level: medium
+  high_risk_keywords:
+    - penalty
+    - unlimited liability
+    - onerous SLA
+    - non-refundable bid bond
+  blocker_keywords:
+    - mandatory local office
+    - security clearance required
+    - blacklisted countries
+
+rules:
+  hard_filters_enabled: true
+  reject_if_any_blocker: true
+  require_non_empty_description: false
+  deadline:
+    reject_if_days_left_below: 0
+    warning_if_days_left_below: 7

@@ -1,0 +1,94 @@
+company:
+  name: "Your Company"
+  description: "B2B & Public Sector IT, Cybersecurity, and AI Solutions Provider"
+
+strategy:
+  target_sectors:
+    - "IT & Enterprise Software"
+    - "Cybersecurity & InfoSec"
+    - "Data & Analytics"
+  target_countries: ["TN", "FR", "MA"]  # Tunisia, France, Morocco
+  preferred_clients:
+    - "Government & Public Sector"
+    - "NGOs & International Organizations"
+    - "Enterprise B2B"
+  excluded_sectors:
+    - "Construction"
+    - "Heavy Industry"
+    - "Gambling & Adult Entertainment"
+
+capabilities:
+  services:
+    - "software development"
+    - "cloud engineering"
+    - "ai integration"
+    - "cybersecurity"
+  # Granular tech stack keywords for exact RFP keyword matching
+  technical_keywords:
+    cloud_devops: ["AWS", "Azure", "Docker", "Kubernetes", "CI/CD", "Terraform"]
+    software_eng: ["Python", "Node.js", "React", "API Design", "Microservices"]
+    ai_data: ["LLM Integration", "RAG", "Data Pipelines", "Machine Learning", "NLP"]
+    cybersecurity: ["SOC", "Penetration Testing", "ISO 27001 Compliance", "IAM"]
+  certifications:
+    - "ISO 27001"
+    - "AWS Select Partner"
+    - "SOC 2 Type II"
+  languages: ["English", "French", "Arabic"]
+
+commercial:
+  min_budget: 10000
+  max_budget: 500000
+  currency: "EUR"
+  preferred_contract_types: ["fixed_price", "framework", "time_and_materials"]
+  max_project_duration_months: 18
+
+eligibility:
+  # Standardized legal/business entity classifications
+  allowed_entity_types: ["LLC", "JSC", "SME"]
+  required_documents:
+    - "tax_clearance_certificate"
+    - "financial_statements_last_2_years"
+    - "certificate_of_incorporation"
+    - "iso_27001_certificate"
+  
+  # Operational & financial capacity safeguards
+  capacity_constraints:
+    min_company_age_years: 3
+    max_contract_to_turnover_ratio: 0.40  # Single contract value cannot exceed 40% of annual turnover
+    min_available_staff: 5
+
+  # Strict dealbreakers (Auto-Reject)
+  hard_blockers:
+    - "bid bond above 10%"
+    - "local office mandatory in non-target country"
+    - "unlimited financial liability required"
+    - "exclusivity clause pre-award"
+
+scoring:
+  weights:
+    domain_relevance: 0.35
+    geography_fit: 0.20
+    budget_fit: 0.20
+    eligibility_fit: 0.15
+    strategic_fit: 0.10
+  thresholds:
+    good_fit: 75  # Direct Bid
+    review: 50    # Human Evaluation Needed
+                  # < 50 = Pass / Reject
+
+risk_rules:
+  # Critical clauses that force auto-rejection or legal review
+  critical_risk_keywords:
+    - "unlimited liability"
+    - "uncapped penalty"
+    - "joint and several liability"
+    - "ip transfer prior to full payment"
+  
+  # Standard clauses that simply flag a warning without rejecting
+  medium_risk_keywords:
+    - "liquidated damages"
+    - "strict SLA"
+    - "penalty clause"
+    - "payment terms > 90 days"
+  
+  max_acceptable_risk_level: "medium"

@@ -6,7 +6,7 @@ import pytest
 
 from agents.gatekeeper.classifiers.gatekeeper_classifier import GatekeeperClassifier
 from agents.gatekeeper.classifiers.settings import GatekeeperSettings
-from agents.gatekeeper.schemas import GatekeeperStatus, RawTenderStagingRecord
+from agents.gatekeeper.schemas import GatekeeperAssessment, GatekeeperStatus, RawTenderStagingRecord
 
 RAW_OUTPUT_APPROVED_MISSING_DEADLINE_KEY = (
     '{"status":"approved","confidence_score":0.95,"decision_reason":"valid tender","cleaned_description":"Cloud migration tender"}'
@@ -75,7 +75,13 @@ def _settings_with_langsmith():
     )
 
 
+def _reset_classifier_caches():
+    GatekeeperClassifier._SYSTEM_INSTRUCTIONS_CACHE = None
+    GatekeeperClassifier._OLLAMA_SCHEMA_CACHE = None
+
+
 def test_classify_posts_expected_payload_and_returns_decision(monkeypatch):
+    _reset_classifier_caches()
     fake_client = _FakeHttpClient(
         {
             "message": {
@@ -104,6 +110,7 @@ def test_classify_posts_expected_payload_and_returns_decision(monkeypatch):
 
 
 def test_classify_raises_when_model_returns_empty_content(monkeypatch):
+    _reset_classifier_caches()
     fake_client = _FakeHttpClient({"message": {"content": ""}})
     monkeypatch.setattr(
         GatekeeperClassifier,
@@ -133,6 +140,7 @@ def test_build_record_message_excludes_internal_timestamps():
     ],
 )
 def test_classify_repairs_approved_outputs_with_missing_deadline(monkeypatch, raw_content):
+    _reset_classifier_caches()
     fake_client = _FakeHttpClient(
         {
             "message": {
@@ -156,6 +164,7 @@ def test_classify_repairs_approved_outputs_with_missing_deadline(monkeypatch, ra
 
 
 def test_classify_demotes_to_needs_review_when_approved_missing_deadline_and_no_metadata(monkeypatch):
+    _reset_classifier_caches()
     fake_client = _FakeHttpClient(
         {
             "message": {
@@ -175,6 +184,42 @@ def test_classify_demotes_to_needs_review_when_approved_missing_deadline_and_no_
     assert decision.status == GatekeeperStatus.NEEDS_REVIEW
     assert decision.extracted_deadline is None
     assert decision.cleaned_description == "Cloud migration tender"
+
+
+def test_system_instructions_are_cached_once_per_process(monkeypatch):
+    _reset_classifier_caches()
+    call_count = {"n": 0}
+
+    def _fake_loader():
+        call_count["n"] += 1
+        return "SYSTEM-CACHED"
+
+    monkeypatch.setattr(GatekeeperClassifier, "_load_system_instructions", staticmethod(_fake_loader))
+
+    classifier1 = GatekeeperClassifier(settings=_settings(), client=_FakeHttpClient({"message": {"content": "{}"}}))
+    classifier2 = GatekeeperClassifier(settings=_settings(), client=_FakeHttpClient({"message": {"content": "{}"}}))
+
+    assert classifier1.system_instructions == "SYSTEM-CACHED"
+    assert classifier2.system_instructions == "SYSTEM-CACHED"
+    assert call_count["n"] == 1
+
+
+def test_ollama_schema_is_cached_once_per_process(monkeypatch):
+    _reset_classifier_caches()
+    call_count = {"n": 0}
+    original = GatekeeperAssessment.model_json_schema
+
+    def _wrapped():
+        call_count["n"] += 1
+        return original()
+
+    monkeypatch.setattr(GatekeeperAssessment, "model_json_schema", staticmethod(_wrapped))
+
+    schema1 = GatekeeperClassifier._ollama_format_schema()
+    schema2 = GatekeeperClassifier._ollama_format_schema()
+
+    assert schema1 == schema2
+    assert call_count["n"] == 1
 
 
 def test_classifier_configures_langsmith_env_when_enabled(monkeypatch):
