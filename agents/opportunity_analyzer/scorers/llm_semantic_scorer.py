@@ -32,7 +32,6 @@ class LLMSemanticScorer:
         self.settings = settings or OpportunityAnalyzerSettings.from_env()
         self.client = client or requests.Session()
         self.system_instructions = self._load_system_instructions()
-        self.excluded_sector_terms = self._load_excluded_sector_terms()
 
     def score(self, record: ProductionTenderRecord) -> OpportunityAssessment:
         """Generate one structured assessment for a production tender."""
@@ -53,7 +52,6 @@ class LLMSemanticScorer:
             return self._build_failed_assessment(f"LLM JSON parsing error: {exc}")
 
         payload = self._attach_budget_metadata(payload, budget_context)
-        payload = self._apply_excluded_sector_prior(payload, record)
 
         try:
             return OpportunityAssessment.model_validate(payload)
@@ -143,7 +141,7 @@ class LLMSemanticScorer:
             return None
         rates = {
             "EUR": 1.0,
-            "€": 1.0,
+            "\u20ac": 1.0,
             "USD": 0.92,
             "$": 0.92,
             "MAD": 0.092,
@@ -152,11 +150,11 @@ class LLMSemanticScorer:
             "GBP": 1.16,
         }
         pattern_after = re.compile(
-            r"(?P<amount>\d[\d\s.,]{1,18})\s*(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)(?!\w)",
+            r"(?P<amount>\d[\d\s.,]{1,18})\s*(?P<currency>EUR|USD|MAD|DH|TND|GBP|\u20ac|\$)(?!\w)",
             flags=re.IGNORECASE,
         )
         pattern_before = re.compile(
-            r"(?<!\w)(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)\s*(?P<amount>\d[\d\s.,]{1,18})",
+            r"(?<!\w)(?P<currency>EUR|USD|MAD|DH|TND|GBP|\u20ac|\$)\s*(?P<amount>\d[\d\s.,]{1,18})",
             flags=re.IGNORECASE,
         )
 
@@ -237,87 +235,6 @@ class LLMSemanticScorer:
         }
         hits = sum(1 for pattern in token_patterns.values() if re.search(pattern, text))
         return hits >= 2
-
-    def _apply_excluded_sector_prior(
-        self,
-        payload: dict[str, Any],
-        record: ProductionTenderRecord,
-    ) -> dict[str, Any]:
-        term = self._match_excluded_sector(record)
-        if not term:
-            return payload
-
-        updated = dict(payload)
-        breakdown = updated.get("score_breakdown")
-        if not isinstance(breakdown, dict):
-            breakdown = {}
-        normalized_breakdown = {str(k): self._coerce_score(v) for k, v in breakdown.items()}
-        normalized_breakdown["domain_relevance"] = min(normalized_breakdown.get("domain_relevance", 0.0), 20.0)
-        normalized_breakdown["strategic_fit"] = min(normalized_breakdown.get("strategic_fit", 0.0), 20.0)
-        updated["score_breakdown"] = normalized_breakdown
-
-        weights = self.settings.scoring.weights if self.settings.scoring else None
-        if weights is not None:
-            updated["total_score"] = round(
-                normalized_breakdown.get("domain_relevance", 0.0) * weights.domain_relevance
-                + normalized_breakdown.get("geography_fit", 0.0) * weights.geography_fit
-                + normalized_breakdown.get("budget_fit", 0.0) * weights.budget_fit
-                + normalized_breakdown.get("eligibility_fit", 0.0) * weights.eligibility_fit
-                + normalized_breakdown.get("strategic_fit", 0.0) * weights.strategic_fit,
-                2,
-            )
-
-        updated["confidence_score"] = min(self._coerce_confidence(updated.get("confidence_score")), 0.65)
-        gaps = self._coerce_string_list(updated.get("gaps"))
-        note = f"Excluded sector prior applied: {term}"
-        if note not in gaps:
-            gaps.append(note)
-        updated["gaps"] = gaps
-        return updated
-
-    def _load_excluded_sector_terms(self) -> list[str]:
-        profile_path = self.settings.company_profile_path
-        if not profile_path.exists():
-            return []
-        try:
-            raw = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return []
-        strategy = raw.get("strategy", {}) if isinstance(raw, dict) else {}
-        excluded = strategy.get("excluded_sectors", []) if isinstance(strategy, dict) else []
-        base_terms = [str(x).strip().lower() for x in excluded if str(x).strip()]
-        synonym_map = {
-            "construction": [
-                "civil works",
-                "construction work",
-                "infrastructure work",
-                "public lighting",
-                "road works",
-                "architectural study",
-                "building rehabilitation",
-                "greening project",
-                "corridor development",
-            ],
-            "heavy industry": [
-                "industrial plant",
-                "factory expansion",
-                "heavy equipment installation",
-                "mining infrastructure",
-            ],
-        }
-        expanded = set(base_terms)
-        for term in base_terms:
-            for key, synonyms in synonym_map.items():
-                if key in term:
-                    expanded.update(s.lower() for s in synonyms)
-        return sorted(expanded)
-
-    def _match_excluded_sector(self, record: ProductionTenderRecord) -> str | None:
-        haystack = " ".join([(record.title or ""), (record.description or "")]).lower()
-        for term in self.excluded_sector_terms:
-            if term and term in haystack:
-                return term
-        return None
 
     @staticmethod
     def _parse_decimal_number(raw: str) -> float | None:

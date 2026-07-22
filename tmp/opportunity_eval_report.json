@@ -1,0 +1,979 @@
+{
+  "samples": 120,
+  "evaluations": 120,
+  "repeat": 1,
+  "status_distribution": {
+    "good_fit": 75,
+    "needs_review": 38,
+    "not_fit": 7
+  },
+  "accuracy": 0.5166666666666667,
+  "good_fit_precision": 0.49333333333333335,
+  "good_fit_recall": 0.925,
+  "good_fit_false_positive_rate": 0.31666666666666665,
+  "zero_score_zero_confidence_rate": 0.16666666666666666,
+  "unsupported_blocker_rate": 0.16666666666666666,
+  "stability": 1.0,
+  "details": [
+    {
+      "unique_key": "golden-0001",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, particularly in terms of urban infrastructure and green architecture capabilities."
+    },
+    {
+      "unique_key": "golden-0002",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0003",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and moderate eligibility."
+    },
+    {
+      "unique_key": "golden-0004",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, particularly in terms of strategic priorities and technical capabilities."
+    },
+    {
+      "unique_key": "golden-0005",
+      "expected": "good_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0006",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0007",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and strategic relevance."
+    },
+    {
+      "unique_key": "golden-0008",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0009",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0010",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0011",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0012",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0013",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0014",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0015",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0016",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.95,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0017",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0018",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company strategy and capabilities, good fit for budget and eligibility."
+    },
+    {
+      "unique_key": "golden-0019",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0020",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0021",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0022",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0023",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0024",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0025",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0026",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit and no hard blockers."
+    },
+    {
+      "unique_key": "golden-0027",
+      "expected": "good_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile and policies, particularly in terms of domain relevance and strategic fit."
+    },
+    {
+      "unique_key": "golden-0028",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0029",
+      "expected": "good_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0030",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0031",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit and no hard blockers."
+    },
+    {
+      "unique_key": "golden-0032",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0033",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0034",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0035",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0036",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0037",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0038",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for budget and eligibility criteria."
+    },
+    {
+      "unique_key": "golden-0039",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0040",
+      "expected": "good_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and strategic relevance."
+    },
+    {
+      "unique_key": "golden-0041",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good budget fit, and moderate eligibility."
+    },
+    {
+      "unique_key": "golden-0042",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0043",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, but missing budget details and incomplete technical documentation."
+    },
+    {
+      "unique_key": "golden-0044",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, particularly in terms of urban infrastructure and green architecture capabilities."
+    },
+    {
+      "unique_key": "golden-0045",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker found: mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0046",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0047",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0048",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for budget and eligibility criteria."
+    },
+    {
+      "unique_key": "golden-0049",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, particularly in terms of strategic fit and budget fit."
+    },
+    {
+      "unique_key": "golden-0050",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and strategic relevance."
+    },
+    {
+      "unique_key": "golden-0051",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0052",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0053",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, particularly in terms of domain relevance and budget fit."
+    },
+    {
+      "unique_key": "golden-0054",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, but budget exceeds preferred range."
+    },
+    {
+      "unique_key": "golden-0055",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities."
+    },
+    {
+      "unique_key": "golden-0056",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0057",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0058",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker found: mandatory local office in non-target country prior to award."
+    },
+    {
+      "unique_key": "golden-0059",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and moderate eligibility."
+    },
+    {
+      "unique_key": "golden-0060",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for budget and eligibility criteria."
+    },
+    {
+      "unique_key": "golden-0061",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0062",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and moderate eligibility."
+    },
+    {
+      "unique_key": "golden-0063",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0064",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker found: mandatory local office in non-target country prior to award."
+    },
+    {
+      "unique_key": "golden-0065",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0066",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and limited budget information."
+    },
+    {
+      "unique_key": "golden-0067",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0068",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0069",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and moderate eligibility."
+    },
+    {
+      "unique_key": "golden-0070",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0071",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and strategic relevance."
+    },
+    {
+      "unique_key": "golden-0072",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0073",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and no budget specified."
+    },
+    {
+      "unique_key": "golden-0074",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0075",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0076",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, but budget estimation is uncertain."
+    },
+    {
+      "unique_key": "golden-0077",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for budget and eligibility criteria."
+    },
+    {
+      "unique_key": "golden-0078",
+      "expected": "needs_review",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0079",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0080",
+      "expected": "needs_review",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, particularly in terms of strategic priorities and target sectors."
+    },
+    {
+      "unique_key": "golden-0081",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0082",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0083",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0084",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities."
+    },
+    {
+      "unique_key": "golden-0085",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Bid bond above 5% detected"
+    },
+    {
+      "unique_key": "golden-0086",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0087",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0088",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and strategic relevance."
+    },
+    {
+      "unique_key": "golden-0089",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Mandatory local presence in non-target country detected"
+    },
+    {
+      "unique_key": "golden-0090",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0091",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0092",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0093",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0094",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Mandatory local presence in non-target country detected"
+    },
+    {
+      "unique_key": "golden-0095",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, but caution on bid bond requirement."
+    },
+    {
+      "unique_key": "golden-0096",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0097",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0098",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0099",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Excluded sector matched: greening project"
+    },
+    {
+      "unique_key": "golden-0100",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0101",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0102",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award."
+    },
+    {
+      "unique_key": "golden-0103",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0104",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, but budget estimation is uncertain."
+    },
+    {
+      "unique_key": "golden-0105",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Bid bond above 5% detected"
+    },
+    {
+      "unique_key": "golden-0106",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0107",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0108",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for budget range and strategic priorities."
+    },
+    {
+      "unique_key": "golden-0109",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.95,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile and policies, but budget estimation is slightly below preferred range."
+    },
+    {
+      "unique_key": "golden-0110",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0111",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities."
+    },
+    {
+      "unique_key": "golden-0112",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and unlimited financial liability required."
+    },
+    {
+      "unique_key": "golden-0113",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for strategic priorities and budget range."
+    },
+    {
+      "unique_key": "golden-0114",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; All-zero assessment with unsupported blockers; downgraded to manual review; Confidence 0.00 below minimum 0.65; Risk normalized to medium because no evidenced blockers remain. Base reason: Hard blocker: Mandatory local Qatari commercial registration prior to bidding is required, which cannot be fulfilled by the company."
+    },
+    {
+      "unique_key": "golden-0115",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good fit for budget range and strategic priorities."
+    },
+    {
+      "unique_key": "golden-0116",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.0,
+      "reason": "Unsupported blocker claims were ignored due to missing evidence; Hard blocker(s) detected; auto-rejected by policy. Base reason: Hard blocker: Mandatory local office in non-target country prior to award, and Clause contractuelle imposant un cautionnement définitif de 20% à la notification."
+    },
+    {
+      "unique_key": "golden-0117",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "High domain/geography alignment with no hard blockers."
+    },
+    {
+      "unique_key": "golden-0118",
+      "expected": "not_fit",
+      "predicted": "good_fit",
+      "score": 83.0,
+      "confidence": 0.85,
+      "reason": "Strong alignment with company profile, good budget fit, and solid eligibility."
+    },
+    {
+      "unique_key": "golden-0119",
+      "expected": "not_fit",
+      "predicted": "not_fit",
+      "score": 0.0,
+      "confidence": 0.95,
+      "reason": "Deterministic hard-prefilter rejected tender: Mandatory local presence in non-target country detected"
+    },
+    {
+      "unique_key": "golden-0120",
+      "expected": "not_fit",
+      "predicted": "needs_review",
+      "score": 74.0,
+      "confidence": 0.8,
+      "reason": "Score is near decision threshold; manual review required. Base reason: Strong alignment with company profile, good fit for strategic priorities and budget range."
+    }
+  ]
+}

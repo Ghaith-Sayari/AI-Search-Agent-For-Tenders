@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -31,15 +32,22 @@ class OpportunityClassifier:
     ) -> None:
         self.settings = settings or OpportunityAnalyzerSettings.from_env()
         self.scorer = scorer or LLMSemanticScorer(settings=self.settings)
-        self.excluded_sector_terms = self._load_excluded_sector_terms(self.settings.company_profile_path)
+        self.profile_policy = self._load_profile_policy(self.settings.company_profile_path)
+        self.excluded_sector_terms = self.profile_policy["excluded_sector_terms"]
+        self.target_countries = self.profile_policy["target_countries"]
+        self.hard_blocker_phrases = self.profile_policy["hard_blocker_phrases"]
 
     def classify(self, record: ProductionTenderRecord | dict[str, Any]) -> OpportunityDecision:
         """Classify one production tender and return final auditable decision."""
         if isinstance(record, dict):
             record = ProductionTenderRecord.model_validate(record)
 
-        assessment = self.scorer.score(record)
-        final_assessment = self._apply_guardrails(record, assessment)
+        prefilter_assessment = self._run_hard_prefilter(record)
+        if prefilter_assessment is not None:
+            final_assessment = prefilter_assessment
+        else:
+            assessment = self.scorer.score(record)
+            final_assessment = self._apply_guardrails(record, assessment)
 
         return OpportunityDecision(
             production_tender_id=record.id,
@@ -47,6 +55,81 @@ class OpportunityClassifier:
             policy_version=self.settings.policy_version,
             agent_version=self.settings.agent_version,
             **final_assessment.model_dump(),
+        )
+
+    def _run_hard_prefilter(self, record: ProductionTenderRecord) -> OpportunityAssessment | None:
+        """Deterministic prefilter to suppress false-positive good_fit decisions."""
+        haystack = self._haystack(record)
+        blockers: list[str] = []
+        blocker_evidence: dict[str, str] = {}
+
+        excluded = self._find_excluded_sector(haystack)
+        if excluded:
+            blocker = f"Excluded sector matched: {excluded}"
+            blockers.append(blocker)
+            blocker_evidence[blocker] = f"Matched excluded sector term in tender text: '{excluded}'"
+
+        if self._has_unlimited_liability(haystack):
+            blocker = "Unlimited liability requirement detected"
+            blockers.append(blocker)
+            blocker_evidence[blocker] = "Detected 'unlimited' + 'liability' in tender text"
+
+        bid_bond = self._extract_percent(haystack, "bid bond")
+        if bid_bond is not None and bid_bond > 5.0:
+            blocker = "Bid bond above 5% detected"
+            blockers.append(blocker)
+            blocker_evidence[blocker] = f"Detected bid bond percentage: {bid_bond}%"
+
+        perf_bond = self._extract_percent(haystack, "performance bond")
+        if perf_bond is not None and perf_bond > 15.0:
+            blocker = "Performance bond above 15% detected"
+            blockers.append(blocker)
+            blocker_evidence[blocker] = f"Detected performance bond percentage: {perf_bond}%"
+
+        if self._requires_local_presence(haystack):
+            country_code = self._normalize_country_code(record.country)
+            if country_code is not None and country_code not in self.target_countries:
+                blocker = "Mandatory local presence in non-target country detected"
+                blockers.append(blocker)
+                blocker_evidence[blocker] = (
+                    f"Local presence requirement found while country='{record.country}' "
+                    f"(normalized={country_code}) is outside target_countries={sorted(self.target_countries)}"
+                )
+
+        for phrase in self.hard_blocker_phrases:
+            if phrase and phrase in haystack:
+                blocker = f"Hard blocker phrase matched: {phrase}"
+                blockers.append(blocker)
+                blocker_evidence[blocker] = f"Matched hard blocker phrase in tender text: '{phrase}'"
+
+        if not blockers:
+            return None
+
+        unique_blockers = self._merge_unique(blockers)
+        reason = "Deterministic hard-prefilter rejected tender: " + "; ".join(unique_blockers)
+
+        return OpportunityAssessment(
+            status=OpportunityStatus.NOT_FIT,
+            total_score=0.0,
+            confidence_score=0.95,
+            decision_reason=reason,
+            risk_level=RiskLevel.HIGH,
+            score_breakdown={
+                "domain_relevance": 0.0,
+                "geography_fit": 0.0,
+                "budget_fit": 0.0,
+                "eligibility_fit": 0.0,
+                "strategic_fit": 0.0,
+            },
+            blockers=unique_blockers,
+            blocker_evidence=blocker_evidence,
+            strengths=[],
+            gaps=[],
+            budget_source="unknown",
+            budget_eur=None,
+            budget_range_min_eur=None,
+            budget_range_max_eur=None,
+            budget_estimation_rationale="deterministic_hard_prefilter",
         )
 
     def _apply_guardrails(
@@ -136,10 +219,10 @@ class OpportunityClassifier:
 
         # 3) Score thresholds (unless confidence already forced needs_review)
         if not blocker_outcome_locked and not low_confidence:
-            status = self._status_from_score(assessment.total_score, cfg.thresholds)
+            status = self._status_from_score(total_score_output, cfg.thresholds)
 
         # 4) Boundary safety
-        if not blocker_outcome_locked and self._is_near_threshold(assessment.total_score, cfg.thresholds, margin=3.0):
+        if not blocker_outcome_locked and self._is_near_threshold(total_score_output, cfg.thresholds, margin=3.0):
             status = OpportunityStatus.NEEDS_REVIEW
             override_reasons.append("Score is near decision threshold; manual review required")
 
@@ -251,15 +334,56 @@ class OpportunityClassifier:
         ).lower()
 
     @staticmethod
-    def _load_excluded_sector_terms(profile_path: Path) -> list[str]:
+    def _extract_percent(haystack: str, prefix: str) -> float | None:
+        pattern = re.compile(rf"{re.escape(prefix)}[^%\n\r]{{0,40}}(\d{{1,2}}(?:\.\d+)?)\s*%")
+        match = pattern.search(haystack)
+        if not match:
+            return None
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _has_unlimited_liability(haystack: str) -> bool:
+        return "unlimited" in haystack and "liability" in haystack
+
+    @staticmethod
+    def _requires_local_presence(haystack: str) -> bool:
+        local_markers = [
+            "mandatory local office",
+            "mandatory local registration",
+            "local company registration",
+            "local state registration",
+            "prior to award",
+            "prior to proposal submission",
+            "local tax registration",
+        ]
+        return any(marker in haystack for marker in local_markers)
+
+    @staticmethod
+    def _load_profile_policy(profile_path: Path) -> dict[str, Any]:
         if not profile_path.exists():
-            return []
+            return {
+                "excluded_sector_terms": [],
+                "target_countries": set(),
+                "hard_blocker_phrases": [],
+            }
         try:
             raw = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
         except Exception:
-            return []
+            return {
+                "excluded_sector_terms": [],
+                "target_countries": set(),
+                "hard_blocker_phrases": [],
+            }
+
         strategy = raw.get("strategy", {}) if isinstance(raw, dict) else {}
         excluded = strategy.get("excluded_sectors", []) if isinstance(strategy, dict) else []
+        target_countries = strategy.get("target_countries", []) if isinstance(strategy, dict) else []
+        eligibility = raw.get("eligibility", {}) if isinstance(raw, dict) else {}
+        hard_blockers = eligibility.get("hard_blockers", []) if isinstance(eligibility, dict) else []
+
         base_terms = [str(x).strip().lower() for x in excluded if str(x).strip()]
         expanded = set(base_terms)
         synonym_map = {
@@ -285,7 +409,27 @@ class OpportunityClassifier:
             for key, synonyms in synonym_map.items():
                 if key in term:
                     expanded.update(s.lower() for s in synonyms)
-        return sorted(expanded)
+        return {
+            "excluded_sector_terms": sorted(expanded),
+            "target_countries": {str(c).strip().upper() for c in target_countries if str(c).strip()},
+            "hard_blocker_phrases": [str(x).strip().lower() for x in hard_blockers if str(x).strip()],
+        }
+
+    @staticmethod
+    def _normalize_country_code(country: str | None) -> str | None:
+        if not country:
+            return None
+        raw = country.strip().lower()
+        alias = {
+            "tn": "TN",
+            "tunisia": "TN",
+            "fr": "FR",
+            "france": "FR",
+            "ma": "MA",
+            "morocco": "MA",
+            "maroc": "MA",
+        }
+        return alias.get(raw, country.strip().upper())
 
     def _find_excluded_sector(self, haystack: str) -> str | None:
         for term in self.excluded_sector_terms:
