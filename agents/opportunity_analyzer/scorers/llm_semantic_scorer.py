@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from agents.opportunity_analyzer.classifiers.settings import OpportunityAnalyzerSettings
 from agents.opportunity_analyzer.schemas.models import (
+    BudgetSource,
     OpportunityAssessment,
     OpportunityStatus,
     ProductionTenderRecord,
@@ -31,6 +32,7 @@ class LLMSemanticScorer:
         self.settings = settings or OpportunityAnalyzerSettings.from_env()
         self.client = client or requests.Session()
         self.system_instructions = self._load_system_instructions()
+        self.excluded_sector_terms = self._load_excluded_sector_terms()
 
     def score(self, record: ProductionTenderRecord) -> OpportunityAssessment:
         """Generate one structured assessment for a production tender."""
@@ -51,6 +53,7 @@ class LLMSemanticScorer:
             return self._build_failed_assessment(f"LLM JSON parsing error: {exc}")
 
         payload = self._attach_budget_metadata(payload, budget_context)
+        payload = self._apply_excluded_sector_prior(payload, record)
 
         try:
             return OpportunityAssessment.model_validate(payload)
@@ -87,8 +90,9 @@ class LLMSemanticScorer:
     def _attach_budget_metadata(payload: dict[str, Any], budget_context: dict[str, Any]) -> dict[str, Any]:
         updated = dict(payload)
         method = str(budget_context.get("method", "")).strip().lower()
+        existing_budget_source = LLMSemanticScorer._coerce_budget_source(payload.get("budget_source"))
         if method == "extracted_from_text":
-            updated.setdefault("budget_source", "extracted")
+            updated["budget_source"] = existing_budget_source or BudgetSource.EXTRACTED.value
             updated.setdefault("budget_eur", budget_context.get("extracted_budget_eur"))
             updated.setdefault("budget_range_min_eur", budget_context.get("extracted_budget_eur"))
             updated.setdefault("budget_range_max_eur", budget_context.get("extracted_budget_eur"))
@@ -97,13 +101,13 @@ class LLMSemanticScorer:
                 f"Extracted explicit amount from text: {budget_context.get('budget_evidence', 'n/a')}",
             )
         elif method == "estimated_from_scope":
-            updated.setdefault("budget_source", "estimated")
+            updated["budget_source"] = existing_budget_source or BudgetSource.ESTIMATED.value
             updated.setdefault("budget_eur", budget_context.get("estimated_budget_mid_eur"))
             updated.setdefault("budget_range_min_eur", budget_context.get("estimated_budget_min_eur"))
             updated.setdefault("budget_range_max_eur", budget_context.get("estimated_budget_max_eur"))
             updated.setdefault("budget_estimation_rationale", budget_context.get("estimation_rationale"))
         else:
-            updated.setdefault("budget_source", "unknown")
+            updated["budget_source"] = existing_budget_source or BudgetSource.UNKNOWN.value
             updated.setdefault("budget_estimation_rationale", "No budget evidence or estimation available")
         return updated
 
@@ -148,11 +152,11 @@ class LLMSemanticScorer:
             "GBP": 1.16,
         }
         pattern_after = re.compile(
-            r"(?P<amount>\d[\d\s.,]{1,18})\s*(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)\b",
+            r"(?P<amount>\d[\d\s.,]{1,18})\s*(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)(?!\w)",
             flags=re.IGNORECASE,
         )
         pattern_before = re.compile(
-            r"(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)\s*(?P<amount>\d[\d\s.,]{1,18})\b",
+            r"(?<!\w)(?P<currency>EUR|USD|MAD|DH|TND|GBP|€|\$)\s*(?P<amount>\d[\d\s.,]{1,18})",
             flags=re.IGNORECASE,
         )
 
@@ -190,6 +194,7 @@ class LLMSemanticScorer:
     @staticmethod
     def _estimate_budget_range_eur(text: str) -> tuple[float, float, str]:
         t = (text or "").lower()
+        has_it_cluster = LLMSemanticScorer._matches_it_cluster(t)
         rules = [
             (
                 ["civil works", "public lighting", "road rehabilitation", "infrastructure", "green corridor", "construction"],
@@ -198,13 +203,121 @@ class LLMSemanticScorer:
             ),
             (["architectural", "engineering study", "monitoring"], (40000, 300000), "architectural/engineering study scope"),
             (["bus", "buses", "vehicle", "acquisition"], (120000, 900000), "equipment/vehicle acquisition scope"),
-            (["software", "it", "cloud", "cyber", "data", "ai"], (40000, 700000), "digital/IT scope"),
             (["consulting", "consultancy", "training"], (15000, 150000), "consulting/training scope"),
         ]
         for keywords, band, rationale in rules:
             if any(k in t for k in keywords):
                 return float(band[0]), float(band[1]), rationale
+        if has_it_cluster:
+            return 40000.0, 700000.0, "digital/IT scope (multi-signal)"
         return 50000.0, 400000.0, "default generic tender band"
+
+    @staticmethod
+    def _matches_it_cluster(text: str) -> bool:
+        strong_phrases = [
+            "software development",
+            "information system",
+            "cyber security",
+            "cloud migration",
+            "data platform",
+            "ai solution",
+            "machine learning",
+        ]
+        if any(phrase in text for phrase in strong_phrases):
+            return True
+        token_patterns = {
+            "software": r"\bsoftware\b",
+            "it": r"\bit\b",
+            "cloud": r"\bcloud\b",
+            "cyber": r"\bcyber(?:security)?\b",
+            "data": r"\bdata\b",
+            "api": r"\bapi\b",
+            "digital": r"\bdigital\b",
+            "platform": r"\bplatform\b",
+        }
+        hits = sum(1 for pattern in token_patterns.values() if re.search(pattern, text))
+        return hits >= 2
+
+    def _apply_excluded_sector_prior(
+        self,
+        payload: dict[str, Any],
+        record: ProductionTenderRecord,
+    ) -> dict[str, Any]:
+        term = self._match_excluded_sector(record)
+        if not term:
+            return payload
+
+        updated = dict(payload)
+        breakdown = updated.get("score_breakdown")
+        if not isinstance(breakdown, dict):
+            breakdown = {}
+        normalized_breakdown = {str(k): self._coerce_score(v) for k, v in breakdown.items()}
+        normalized_breakdown["domain_relevance"] = min(normalized_breakdown.get("domain_relevance", 0.0), 20.0)
+        normalized_breakdown["strategic_fit"] = min(normalized_breakdown.get("strategic_fit", 0.0), 20.0)
+        updated["score_breakdown"] = normalized_breakdown
+
+        weights = self.settings.scoring.weights if self.settings.scoring else None
+        if weights is not None:
+            updated["total_score"] = round(
+                normalized_breakdown.get("domain_relevance", 0.0) * weights.domain_relevance
+                + normalized_breakdown.get("geography_fit", 0.0) * weights.geography_fit
+                + normalized_breakdown.get("budget_fit", 0.0) * weights.budget_fit
+                + normalized_breakdown.get("eligibility_fit", 0.0) * weights.eligibility_fit
+                + normalized_breakdown.get("strategic_fit", 0.0) * weights.strategic_fit,
+                2,
+            )
+
+        updated["confidence_score"] = min(self._coerce_confidence(updated.get("confidence_score")), 0.65)
+        gaps = self._coerce_string_list(updated.get("gaps"))
+        note = f"Excluded sector prior applied: {term}"
+        if note not in gaps:
+            gaps.append(note)
+        updated["gaps"] = gaps
+        return updated
+
+    def _load_excluded_sector_terms(self) -> list[str]:
+        profile_path = self.settings.company_profile_path
+        if not profile_path.exists():
+            return []
+        try:
+            raw = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return []
+        strategy = raw.get("strategy", {}) if isinstance(raw, dict) else {}
+        excluded = strategy.get("excluded_sectors", []) if isinstance(strategy, dict) else []
+        base_terms = [str(x).strip().lower() for x in excluded if str(x).strip()]
+        synonym_map = {
+            "construction": [
+                "civil works",
+                "construction work",
+                "infrastructure work",
+                "public lighting",
+                "road works",
+                "architectural study",
+                "building rehabilitation",
+                "greening project",
+                "corridor development",
+            ],
+            "heavy industry": [
+                "industrial plant",
+                "factory expansion",
+                "heavy equipment installation",
+                "mining infrastructure",
+            ],
+        }
+        expanded = set(base_terms)
+        for term in base_terms:
+            for key, synonyms in synonym_map.items():
+                if key in term:
+                    expanded.update(s.lower() for s in synonyms)
+        return sorted(expanded)
+
+    def _match_excluded_sector(self, record: ProductionTenderRecord) -> str | None:
+        haystack = " ".join([(record.title or ""), (record.description or "")]).lower()
+        for term in self.excluded_sector_terms:
+            if term and term in haystack:
+                return term
+        return None
 
     @staticmethod
     def _parse_decimal_number(raw: str) -> float | None:
@@ -334,6 +447,14 @@ class LLMSemanticScorer:
         return cleaned
 
     @staticmethod
+    def _coerce_budget_source(value: Any) -> str | None:
+        raw = str(value or "").strip().lower()
+        for allowed in BudgetSource:
+            if raw == allowed.value:
+                return raw
+        return None
+
+    @staticmethod
     def _coerce_risk_level(value: Any) -> RiskLevel:
         raw = str(value or "").strip().lower()
         for allowed in RiskLevel:
@@ -371,7 +492,7 @@ class LLMSemanticScorer:
             blocker_evidence={},
             strengths=self._coerce_string_list(payload.get("strengths")),
             gaps=self._coerce_string_list(payload.get("gaps"), fallback=["Validation fallback triggered"]),
-            budget_source=str(payload.get("budget_source") or "unknown"),
+            budget_source=self._coerce_budget_source(payload.get("budget_source")) or BudgetSource.UNKNOWN.value,
             budget_eur=payload.get("budget_eur"),
             budget_range_min_eur=payload.get("budget_range_min_eur"),
             budget_range_max_eur=payload.get("budget_range_max_eur"),
@@ -391,6 +512,6 @@ class LLMSemanticScorer:
             blocker_evidence={},
             strengths=[],
             gaps=["Automatic scoring unavailable"],
-            budget_source="unknown",
+            budget_source=BudgetSource.UNKNOWN.value,
             budget_estimation_rationale="Scoring failed before budget estimation could be applied",
         )

@@ -61,6 +61,10 @@ class OpportunityClassifier:
         status = assessment.status
         override_reasons: list[str] = []
         haystack = self._haystack(record)
+        strengths_output = list(assessment.strengths)
+        score_breakdown_output = dict(assessment.score_breakdown)
+        total_score_output = assessment.total_score
+        excluded_sector_reason: str | None = None
 
         keyword_blockers = self._detect_keyword_blockers(haystack, cfg.risk.blocker_keywords)
         valid_llm_blockers, unsupported_llm_blockers, blocker_evidence = self._filter_evidenced_llm_blockers(
@@ -106,6 +110,20 @@ class OpportunityClassifier:
                 f"Matched excluded sector term in tender text: '{excluded_sector}'"
             )
             override_reasons.append(f"Tender falls under excluded sector '{excluded_sector}'")
+            excluded_sector_reason = (
+                f"Excluded sector policy triggered: '{excluded_sector}'. Tender is not fit regardless of LLM score."
+            )
+            strengths_output = []
+            score_breakdown_output["domain_relevance"] = min(score_breakdown_output.get("domain_relevance", 0.0), 20.0)
+            score_breakdown_output["strategic_fit"] = min(score_breakdown_output.get("strategic_fit", 0.0), 20.0)
+            total_score_output = round(
+                score_breakdown_output.get("domain_relevance", 0.0) * cfg.weights.domain_relevance
+                + score_breakdown_output.get("geography_fit", 0.0) * cfg.weights.geography_fit
+                + score_breakdown_output.get("budget_fit", 0.0) * cfg.weights.budget_fit
+                + score_breakdown_output.get("eligibility_fit", 0.0) * cfg.weights.eligibility_fit
+                + score_breakdown_output.get("strategic_fit", 0.0) * cfg.weights.strategic_fit,
+                2,
+            )
 
         # 2) Confidence gate (unless blocked to NOT_FIT by policy)
         low_confidence = assessment.confidence_score < cfg.confidence.min_for_auto_decision
@@ -148,7 +166,9 @@ class OpportunityClassifier:
             override_reasons.append("Risk normalized to medium because no evidenced blockers remain")
 
         decision_reason = assessment.decision_reason
-        if override_reasons:
+        if excluded_sector_reason:
+            decision_reason = excluded_sector_reason
+        elif override_reasons:
             decision_reason = f"{'; '.join(override_reasons)}. Base reason: {assessment.decision_reason}"
 
         gaps = list(assessment.gaps)
@@ -159,14 +179,14 @@ class OpportunityClassifier:
 
         return OpportunityAssessment(
             status=status,
-            total_score=assessment.total_score,
+            total_score=total_score_output,
             confidence_score=assessment.confidence_score,
             decision_reason=decision_reason,
             risk_level=risk_level,
-            score_breakdown=assessment.score_breakdown,
+            score_breakdown=score_breakdown_output,
             blockers=blockers,
             blocker_evidence=blocker_evidence,
-            strengths=assessment.strengths,
+            strengths=strengths_output,
             gaps=gaps,
             budget_source=assessment.budget_source,
             budget_eur=assessment.budget_eur,
