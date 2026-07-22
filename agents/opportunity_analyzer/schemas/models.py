@@ -25,6 +25,14 @@ class RiskLevel(str, Enum):
     HIGH = "high"
 
 
+class BudgetSource(str, Enum):
+    """How budget information was obtained."""
+
+    EXTRACTED = "extracted"
+    ESTIMATED = "estimated"
+    UNKNOWN = "unknown"
+
+
 class ProductionTenderRecord(BaseModel):
     """Input row read from ``public.production_tender``."""
 
@@ -63,8 +71,14 @@ class OpportunityAssessment(BaseModel):
     risk_level: RiskLevel = RiskLevel.MEDIUM
     score_breakdown: Dict[str, float] = Field(default_factory=dict)
     blockers: List[str] = Field(default_factory=list)
+    blocker_evidence: Dict[str, str] = Field(default_factory=dict)
     strengths: List[str] = Field(default_factory=list)
     gaps: List[str] = Field(default_factory=list)
+    budget_source: BudgetSource = BudgetSource.UNKNOWN
+    budget_eur: Optional[float] = Field(default=None, ge=0)
+    budget_range_min_eur: Optional[float] = Field(default=None, ge=0)
+    budget_range_max_eur: Optional[float] = Field(default=None, ge=0)
+    budget_estimation_rationale: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -83,6 +97,16 @@ class OpportunityAssessment(BaseModel):
                 raise ValueError("score_breakdown keys cannot be blank")
             if not (0 <= score <= 100):
                 raise ValueError("Each score_breakdown value must be between 0 and 100")
+        return value
+
+    @field_validator("budget_range_max_eur")
+    @classmethod
+    def budget_range_must_be_ordered(cls, value: Optional[float], info):
+        if value is None:
+            return value
+        min_value = info.data.get("budget_range_min_eur")
+        if min_value is not None and value < min_value:
+            raise ValueError("budget_range_max_eur must be greater than or equal to budget_range_min_eur")
         return value
 
 
