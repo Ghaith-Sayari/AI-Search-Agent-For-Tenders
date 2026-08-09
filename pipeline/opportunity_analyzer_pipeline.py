@@ -125,6 +125,15 @@ class OpportunityAnalyzerPipeline:
                 )
                 logger.error("[%d/%d] %s -> ERROR: %s", idx, len(unprocessed), unique_key, exc)
 
+        recommendations = []
+        ranking_error: str | None = None
+        if decisions:
+            try:
+                recommendations = self.classifier._rank_decisions(decisions)
+            except Exception as rank_exc:
+                ranking_error = str(rank_exc)
+                logger.error("Failed to rank opportunities: %s", rank_exc)
+
         return {
             "total_fetched": len(raw_records),
             "skipped": len(skipped_keys),
@@ -140,4 +149,7 @@ class OpportunityAnalyzerPipeline:
             "not_fit_count": counts[OpportunityStatus.NOT_FIT.value],
             "failed_count": counts[OpportunityStatus.FAILED.value],
             "decisions": decisions,
+            "recommended_count": len(recommendations),
+            "recommended_decisions": recommendations,
+            "ranking_error": ranking_error,
         }

@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 from collections import Counter, defaultdict
+from statistics import mean, median
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -80,7 +81,13 @@ def _safe_status(value: Any) -> str | None:
     return raw if raw in valid else None
 
 
-def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
+def _evaluate(
+    rows: list[dict[str, Any]],
+    repeat: int,
+    self_consistency_runs: int,
+    include_fallback_stats: bool = False,
+) -> dict[str, Any]:
+    os.environ["OPPORTUNITY_ANALYZER_SELF_CONSISTENCY_RUNS"] = str(max(1, self_consistency_runs))
     classifier = OpportunityClassifier()
     results: list[dict[str, Any]] = []
     stability_map: dict[str, list[str]] = defaultdict(list)
@@ -99,6 +106,8 @@ def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
                     "predicted": predicted,
                     "score": decision.total_score,
                     "confidence": decision.confidence_score,
+                    "fallback_reason": decision.fallback_reason,
+                    "prefilter_triggered": bool((classifier.last_trace or {}).get("prefilter_triggered")),
                     "reason": decision.decision_reason,
                 }
             )
@@ -116,6 +125,8 @@ def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
 
     zero_zero = sum(1 for r in results if float(r["score"]) == 0.0 and float(r["confidence"]) == 0.0)
     unsupported_blocker = sum(1 for r in results if "Unsupported blocker claims were ignored" in (r["reason"] or ""))
+    fallback_rows = [r for r in results if r.get("fallback_reason")]
+    fallback_reasons = Counter(str(r["fallback_reason"]) for r in fallback_rows if r.get("fallback_reason"))
 
     stable = 0
     for statuses in stability_map.values():
@@ -123,10 +134,24 @@ def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
             stable += 1
     stability = stable / len(stability_map) if stability_map else None
 
-    return {
+    non_prefilter = [r for r in results if not r.get("prefilter_triggered")]
+    score_distribution_by_expected: dict[str, dict[str, float | int | None]] = {}
+    for label in ("good_fit", "needs_review", "not_fit"):
+        subset = [float(r["score"]) for r in non_prefilter if r.get("expected") == label]
+        if not subset:
+            score_distribution_by_expected[label] = {"count": 0, "mean": None, "median": None}
+            continue
+        score_distribution_by_expected[label] = {
+            "count": len(subset),
+            "mean": round(mean(subset), 2),
+            "median": round(median(subset), 2),
+        }
+
+    report = {
         "samples": len(rows),
         "evaluations": len(results),
         "repeat": repeat,
+        "self_consistency_runs": self_consistency_runs,
         "status_distribution": dict(Counter(r["predicted"] for r in results)),
         "accuracy": accuracy,
         "good_fit_precision": precision_good,
@@ -135,8 +160,13 @@ def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
         "zero_score_zero_confidence_rate": (zero_zero / len(results)) if results else None,
         "unsupported_blocker_rate": (unsupported_blocker / len(results)) if results else None,
         "stability": stability,
+        "score_distribution_by_expected_excluding_prefilter": score_distribution_by_expected,
         "details": results,
     }
+    if include_fallback_stats:
+        report["fallback_rate"] = (len(fallback_rows) / len(results)) if results else None
+        report["fallback_reason_breakdown"] = dict(fallback_reasons)
+    return report
 
 
 def main() -> int:
@@ -147,6 +177,22 @@ def main() -> int:
         help="Path to JSONL/JSON dataset.",
     )
     parser.add_argument("--repeat", type=int, default=1, help="How many repeated runs per sample.")
+    parser.add_argument(
+        "--self-consistency-runs",
+        type=int,
+        default=3,
+        help="LLM self-consistency runs per classification call.",
+    )
+    parser.add_argument(
+        "--fast-eval",
+        action="store_true",
+        help="Fast mode: force self-consistency runs to 1 for quicker evaluation iterations.",
+    )
+    parser.add_argument(
+        "--include-fallback-stats",
+        action="store_true",
+        help="Include fallback_rate and fallback_reason_breakdown in the report output.",
+    )
     parser.add_argument("--output", default="tmp/opportunity_eval_report.json", help="Output JSON report path.")
     args = parser.parse_args()
 
@@ -166,7 +212,13 @@ def main() -> int:
         print("ERROR: Dataset is empty.")
         return 1
 
-    report = _evaluate(rows, repeat=max(1, args.repeat))
+    self_consistency_runs = 1 if args.fast_eval else max(1, args.self_consistency_runs)
+    report = _evaluate(
+        rows,
+        repeat=max(1, args.repeat),
+        self_consistency_runs=self_consistency_runs,
+        include_fallback_stats=bool(args.include_fallback_stats),
+    )
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -180,4 +232,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
