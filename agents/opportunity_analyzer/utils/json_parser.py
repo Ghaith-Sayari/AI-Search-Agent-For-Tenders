@@ -17,7 +17,7 @@ malformed input -- it returns None so callers can decide what to do
 import json
 import re
 
-from utils.logger import get_logger
+from agents.opportunity_analyzer.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

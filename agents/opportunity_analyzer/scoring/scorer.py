@@ -11,8 +11,8 @@ Current configured signals:
 - llm_judgment (with an additional min_llm_confidence gate from config)
 """
 
-from config import config
-from models.analysis import Analysis, SignalScore
+from agents.opportunity_analyzer.config import config
+from agents.opportunity_analyzer.models.analysis import Analysis, SignalScore
 
 # Below this confidence, a signal is excluded and its weight redistributed.
 CONFIDENCE_FLOOR = 0.15

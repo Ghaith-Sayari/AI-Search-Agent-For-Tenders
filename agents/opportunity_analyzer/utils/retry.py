@@ -2,7 +2,7 @@ import functools
 import time
 from typing import Callable, TypeVar
 
-from utils.logger import get_logger
+from agents.opportunity_analyzer.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,4 +1,4 @@
-from models.opportunity import Opportunity
+from agents.opportunity_analyzer.models.opportunity import Opportunity
 from datetime import date
 from typing import Any
 

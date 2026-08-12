@@ -15,11 +15,11 @@ from typing import Any, Union
 
 import requests
 
-from config import config
-from models.llm_response import LLMResponse, LLMResponseStatus
-from utils.json_parser import parse_llm_json
-from utils.logger import get_logger
-from utils.retry import retry
+from agents.opportunity_analyzer.config import config
+from agents.opportunity_analyzer.models.llm_response import LLMResponse, LLMResponseStatus
+from agents.opportunity_analyzer.utils.json_parser import parse_llm_json
+from agents.opportunity_analyzer.utils.logger import get_logger
+from agents.opportunity_analyzer.utils.retry import retry
 
 logger = get_logger(__name__)
 

@@ -8,11 +8,11 @@ Produces a `llm_judgment` SignalScore by:
 
 from typing import Any
 
-from models.analysis import SignalScore
-from models.opportunity import Opportunity
-from models.profile import Profile
-from services import llm_service
-from utils.validator import validate_extraction_result
+from agents.opportunity_analyzer.models.analysis import SignalScore
+from agents.opportunity_analyzer.models.opportunity import Opportunity
+from agents.opportunity_analyzer.models.profile import Profile
+from agents.opportunity_analyzer.services import llm_service
+from agents.opportunity_analyzer.utils.validator import validate_extraction_result
 
 
 def _clamp01(value: Any, default: float) -> float:
@@ -81,4 +81,3 @@ def analyze(opportunity: Opportunity, profile: Profile, weight: float) -> Signal
             "extracted": extraction.data,
         },
     )
-

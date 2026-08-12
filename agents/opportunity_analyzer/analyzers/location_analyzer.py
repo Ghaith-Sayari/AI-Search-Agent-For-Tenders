@@ -1,8 +1,8 @@
 """Rule-based location match. Treats an empty profile location list as 'anywhere is fine'."""
 
-from models.opportunity import Opportunity
-from models.profile import Profile
-from models.analysis import SignalScore
+from agents.opportunity_analyzer.models.analysis import SignalScore
+from agents.opportunity_analyzer.models.opportunity import Opportunity
+from agents.opportunity_analyzer.models.profile import Profile
 
 
 def analyze(opportunity: Opportunity, profile: Profile, weight: float) -> SignalScore:

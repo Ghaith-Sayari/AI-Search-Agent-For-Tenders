@@ -1,4 +1,4 @@
-from config import ScoringWeights, config
+from agents.opportunity_analyzer.config import ScoringWeights, config
 
 
 def get_weights() -> ScoringWeights:

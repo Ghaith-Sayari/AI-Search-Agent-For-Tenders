@@ -6,9 +6,9 @@ the LLM-derived signal has a bad day.
 
 import re
 
-from models.opportunity import Opportunity
-from models.profile import Profile
-from models.analysis import SignalScore
+from agents.opportunity_analyzer.models.analysis import SignalScore
+from agents.opportunity_analyzer.models.opportunity import Opportunity
+from agents.opportunity_analyzer.models.profile import Profile
 
 _SYNONYM_PHRASES: dict[str, set[str]] = {
     "managed services": {"managed support", "24/7 managed support", "24x7 managed support"},

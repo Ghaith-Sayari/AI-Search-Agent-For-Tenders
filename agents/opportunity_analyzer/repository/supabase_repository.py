@@ -6,8 +6,8 @@ DB outage doesn't block analysis, only storage of results.
 
 from dataclasses import asdict
 
-from models.analysis import Analysis
-from utils.logger import get_logger
+from agents.opportunity_analyzer.models.analysis import Analysis
+from agents.opportunity_analyzer.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

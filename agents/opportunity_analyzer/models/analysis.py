@@ -102,7 +102,7 @@ class Analysis:
         scoring.scorer.
         """
         del confidence_threshold
-        from scoring.scorer import compute_total_score
+        from agents.opportunity_analyzer.scoring.scorer import compute_total_score
 
         total, low_confidence = compute_total_score(self.signals)
         self.total_score = total

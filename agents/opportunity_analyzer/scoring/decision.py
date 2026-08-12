@@ -1,5 +1,5 @@
-from config import config
-from models.analysis import Analysis, Decision
+from agents.opportunity_analyzer.config import config
+from agents.opportunity_analyzer.models.analysis import Analysis, Decision
 
 
 def decide(analysis: Analysis) -> Analysis:
