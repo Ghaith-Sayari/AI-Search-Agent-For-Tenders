@@ -7,6 +7,8 @@ from agents.proposal_generator.models.compliance_report import ComplianceIssue
 from agents.proposal_generator.models.proposal_output import ProposalOutput
 from agents.proposal_generator.models.proposal_section import ProposalSection
 from agents.proposal_generator.pipeline.score_proposal import ProposalScore
+from agents.proposal_generator.renderers.docx_renderer import render_proposal_docx_bytes
+from agents.proposal_generator.renderers.markdown_renderer import render_markdown
 
 
 def _build_executive_summary(
@@ -71,7 +73,16 @@ def build_proposal_output(
 
 
 def build_export_bundle(output: ProposalOutput) -> dict:
-    """Return a ready-to-save bundle containing JSON-safe fields + markdown."""
+    """Return a ready-to-save bundle containing JSON-safe fields + markdown/docx."""
+    markdown = render_markdown(output)
+    tender_title = str(output.metadata.get("tender_title") or "Tender Proposal")
+    docx_bytes = None
+    docx_error = None
+    try:
+        docx_bytes = render_proposal_docx_bytes(output, tender_title=tender_title)
+    except Exception as exc:
+        docx_error = str(exc)
+
     return {
         "tender_external_id": output.tender_external_id,
         "profile_name": output.profile_name,
@@ -100,5 +111,7 @@ def build_export_bundle(output: ProposalOutput) -> dict:
             for i in output.compliance_issues
         ],
         "metadata": output.metadata,
-        "markdown": output.to_markdown(),
+        "markdown": markdown,
+        "docx_bytes": docx_bytes,
+        "docx_error": docx_error,
     }

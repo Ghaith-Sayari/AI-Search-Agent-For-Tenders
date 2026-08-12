@@ -64,8 +64,14 @@ class ProposalRepository:
             raise RuntimeError("Supabase insert returned no row for generated proposal")
         return response.data[0]
 
-    def upload_artifacts(self, proposal_row: dict[str, Any], output: ProposalOutput, markdown_text: str) -> dict[str, str]:
-        """Upload JSON + markdown artifacts to Supabase Storage."""
+    def upload_artifacts(
+        self,
+        proposal_row: dict[str, Any],
+        output: ProposalOutput,
+        markdown_text: str,
+        docx_bytes: bytes | None = None,
+    ) -> dict[str, str]:
+        """Upload JSON + markdown + optional DOCX artifacts to Supabase Storage."""
         self.ensure_bucket(public=False)
 
         proposal_id = str(proposal_row.get("id") or "unknown")
@@ -74,6 +80,7 @@ class ProposalRepository:
         base_prefix = f"{output.profile_name.strip().replace(' ', '_')}/{proposal_id}/{stamp}"
         md_path = f"{base_prefix}/proposal.md"
         json_path = f"{base_prefix}/proposal.json"
+        docx_path = f"{base_prefix}/proposal.docx"
 
         json_payload = {
             "proposal": proposal_row,
@@ -92,12 +99,23 @@ class ProposalRepository:
             file=json.dumps(json_payload, ensure_ascii=False, indent=2).encode("utf-8"),
             file_options={"content-type": "application/json"},
         )
+        if docx_bytes:
+            self.client.storage.from_(self.bucket_name).upload(
+                path=docx_path,
+                file=docx_bytes,
+                file_options={
+                    "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                },
+            )
 
-        return {
+        response = {
             "bucket": self.bucket_name,
             "markdown_path": md_path,
             "json_path": json_path,
         }
+        if docx_bytes:
+            response["docx_path"] = docx_path
+        return response
 
 
 def payload_sections(output: ProposalOutput) -> list[dict[str, Any]]:

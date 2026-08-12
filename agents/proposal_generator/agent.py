@@ -160,6 +160,7 @@ class ProposalGeneratorAgent:
             score=score,
             compliance_issues=issues,
             metadata={
+                "tender_title": proposal_input.tender.title,
                 "risk_flags": ctx.risk_flags,
                 "requirements_count": len(ctx.extracted_requirements),
                 "compliance_score": comp_score,
@@ -173,7 +174,12 @@ class ProposalGeneratorAgent:
         if save:
             saved_row = self.repository.save_proposal(output, bundle["markdown"])
             if upload_files:
-                storage_paths = self.repository.upload_artifacts(saved_row, output, bundle["markdown"])
+                storage_paths = self.repository.upload_artifacts(
+                    saved_row,
+                    output,
+                    bundle["markdown"],
+                    docx_bytes=bundle.get("docx_bytes"),
+                )
 
         return {
             "output": output,
@@ -224,6 +230,7 @@ def main() -> int:
         "decision": result["bundle"]["decision"],
         "total_score": result["bundle"]["total_score"],
         "confidence_score": result["bundle"]["confidence_score"],
+        "docx_error": result["bundle"].get("docx_error"),
         "saved_id": (result["saved_row"] or {}).get("id"),
         "storage": result["storage"],
     }
