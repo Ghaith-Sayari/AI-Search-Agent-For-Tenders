@@ -6,10 +6,12 @@ Dataset format (JSONL or JSON array):
   "title": "...",
   "description": "...",
   "country": "Morocco",
-  "deadline": "2026-08-15",
-  "source": "manual",
-  "expected_status": "good_fit|needs_review|not_fit"
+  "expected_status": "pursue|review|reject"
 }
+Legacy labels are accepted and mapped:
+- good_fit -> pursue
+- needs_review -> review
+- not_fit -> reject
 """
 
 from __future__ import annotations
@@ -18,14 +20,21 @@ import argparse
 import json
 import os
 from collections import Counter, defaultdict
-from statistics import mean, median
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from statistics import mean, median
 from typing import Any
-from uuid import uuid4
 
-from agents.opportunity_analyzer.classifiers.opportunity_classifier import OpportunityClassifier
-from agents.opportunity_analyzer.schemas.models import OpportunityStatus, ProductionTenderRecord
+from agents.opportunity_analyzer.analyzers import (
+    keyword_analyzer,
+    llm_judgment_analyzer,
+    location_analyzer,
+)
+from agents.opportunity_analyzer.models.analysis import Analysis
+from agents.opportunity_analyzer.models.opportunity import Opportunity
+from agents.opportunity_analyzer.models.profile import Profile
+from agents.opportunity_analyzer.scoring.decision import decide
+from agents.opportunity_analyzer.scoring.scorer import score_analysis
+from agents.opportunity_analyzer.scoring.weights import weight_for
 
 
 def _load_dataset(path: Path) -> list[dict[str, Any]]:
@@ -52,63 +61,80 @@ def _load_dataset(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _build_record(sample: dict[str, Any], idx: int) -> ProductionTenderRecord:
-    now = datetime.now(timezone.utc)
-    deadline = sample.get("deadline") or (now.date() + timedelta(days=30)).isoformat()
-    return ProductionTenderRecord.model_validate(
-        {
-            "id": sample.get("id") or str(uuid4()),
-            "unique_key": sample.get("unique_key") or f"golden-{idx}",
-            "source": sample.get("source") or "golden_dataset",
-            "title": sample.get("title") or "Untitled sample",
-            "country": sample.get("country"),
-            "posting_date": sample.get("posting_date"),
-            "deadline": deadline,
-            "url": sample.get("url"),
-            "description": sample.get("description"),
-            "external_id": sample.get("external_id"),
-            "staging_tender_id": sample.get("staging_tender_id") or str(uuid4()),
-            "gatekeeper_decision_id": sample.get("gatekeeper_decision_id"),
-            "created_at": sample.get("created_at") or now.isoformat(),
-            "updated_at": sample.get("updated_at") or now.isoformat(),
-        }
+def _to_expected_status(value: Any) -> str | None:
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "pursue": "pursue",
+        "review": "review",
+        "reject": "reject",
+        "good_fit": "pursue",
+        "needs_review": "review",
+        "not_fit": "reject",
+    }
+    return mapping.get(raw)
+
+
+def _build_opportunity(sample: dict[str, Any], idx: int) -> Opportunity:
+    uid = str(sample.get("unique_key") or f"golden-{idx}")
+    return Opportunity(
+        id=uid,
+        unique_key=uid,
+        source=str(sample.get("source") or "golden_dataset"),
+        title=str(sample.get("title") or "Untitled sample"),
+        country=str(sample.get("country") or "unknown"),
+        description=str(sample.get("description") or ""),
+        raw_text=sample.get("raw_text") if isinstance(sample.get("raw_text"), str) else None,
+        url=sample.get("url"),
+        external_id=sample.get("external_id"),
     )
 
 
-def _safe_status(value: Any) -> str | None:
-    raw = str(value or "").strip().lower()
-    valid = {s.value for s in OpportunityStatus}
-    return raw if raw in valid else None
+def _build_profile(sample: dict[str, Any]) -> Profile:
+    profile_payload = sample.get("profile")
+    if not isinstance(profile_payload, dict):
+        profile_payload = {}
+    return Profile(
+        id=str(profile_payload.get("id") or "golden-profile"),
+        name=str(profile_payload.get("name") or "Golden Profile"),
+        description=str(profile_payload.get("description") or ""),
+        sectors=profile_payload.get("sectors") if isinstance(profile_payload.get("sectors"), list) else [],
+        keywords=profile_payload.get("keywords") if isinstance(profile_payload.get("keywords"), list) else [],
+        locations=profile_payload.get("locations") if isinstance(profile_payload.get("locations"), list) else [],
+        min_budget=profile_payload.get("min_budget"),
+        max_budget=profile_payload.get("max_budget"),
+    )
 
 
-def _evaluate(
-    rows: list[dict[str, Any]],
-    repeat: int,
-    self_consistency_runs: int,
-    include_fallback_stats: bool = False,
-) -> dict[str, Any]:
-    os.environ["OPPORTUNITY_ANALYZER_SELF_CONSISTENCY_RUNS"] = str(max(1, self_consistency_runs))
-    classifier = OpportunityClassifier()
+def _analyze(opportunity: Opportunity, profile: Profile) -> Analysis:
+    analysis = Analysis(opportunity_id=opportunity.id, profile_id=profile.id)
+    analysis.add_signal(keyword_analyzer.analyze(opportunity, profile, weight_for("keyword")))
+    analysis.add_signal(location_analyzer.analyze(opportunity, profile, weight_for("location")))
+    analysis.add_signal(llm_judgment_analyzer.analyze(opportunity, profile, weight_for("llm_judgment")))
+    score_analysis(analysis)
+    decide(analysis)
+    return analysis
+
+
+def _evaluate(rows: list[dict[str, Any]], repeat: int) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     stability_map: dict[str, list[str]] = defaultdict(list)
 
     for idx, sample in enumerate(rows, start=1):
-        expected = _safe_status(sample.get("expected_status"))
-        record = _build_record(sample, idx)
+        expected = _to_expected_status(sample.get("expected_status"))
+        opportunity = _build_opportunity(sample, idx)
+        profile = _build_profile(sample)
         for _ in range(repeat):
-            decision = classifier.classify(record)
-            predicted = decision.status.value
-            stability_map[record.unique_key].append(predicted)
+            analysis = _analyze(opportunity, profile)
+            predicted = analysis.decision.value
+            stability_map[opportunity.id].append(predicted)
             results.append(
                 {
-                    "unique_key": record.unique_key,
+                    "unique_key": opportunity.unique_key or opportunity.id,
                     "expected": expected,
                     "predicted": predicted,
-                    "score": decision.total_score,
-                    "confidence": decision.confidence_score,
-                    "fallback_reason": decision.fallback_reason,
-                    "prefilter_triggered": bool((classifier.last_trace or {}).get("prefilter_triggered")),
-                    "reason": decision.decision_reason,
+                    "score": analysis.total_score,
+                    "low_confidence": analysis.low_confidence,
+                    "reason": analysis.reasoning,
                 }
             )
 
@@ -116,57 +142,31 @@ def _evaluate(
     correct = sum(1 for r in with_expected if r["expected"] == r["predicted"])
     accuracy = (correct / len(with_expected)) if with_expected else None
 
-    tp_good = sum(1 for r in with_expected if r["predicted"] == "good_fit" and r["expected"] == "good_fit")
-    fp_good = sum(1 for r in with_expected if r["predicted"] == "good_fit" and r["expected"] != "good_fit")
-    fn_good = sum(1 for r in with_expected if r["predicted"] != "good_fit" and r["expected"] == "good_fit")
-
-    precision_good = tp_good / (tp_good + fp_good) if (tp_good + fp_good) else None
-    recall_good = tp_good / (tp_good + fn_good) if (tp_good + fn_good) else None
-
-    zero_zero = sum(1 for r in results if float(r["score"]) == 0.0 and float(r["confidence"]) == 0.0)
-    unsupported_blocker = sum(1 for r in results if "Unsupported blocker claims were ignored" in (r["reason"] or ""))
-    fallback_rows = [r for r in results if r.get("fallback_reason")]
-    fallback_reasons = Counter(str(r["fallback_reason"]) for r in fallback_rows if r.get("fallback_reason"))
-
-    stable = 0
-    for statuses in stability_map.values():
-        if len(set(statuses)) == 1:
-            stable += 1
+    stable = sum(1 for statuses in stability_map.values() if len(set(statuses)) == 1)
     stability = stable / len(stability_map) if stability_map else None
 
-    non_prefilter = [r for r in results if not r.get("prefilter_triggered")]
     score_distribution_by_expected: dict[str, dict[str, float | int | None]] = {}
-    for label in ("good_fit", "needs_review", "not_fit"):
-        subset = [float(r["score"]) for r in non_prefilter if r.get("expected") == label]
+    for label in ("pursue", "review", "reject"):
+        subset = [float(r["score"]) for r in with_expected if r.get("expected") == label]
         if not subset:
             score_distribution_by_expected[label] = {"count": 0, "mean": None, "median": None}
             continue
         score_distribution_by_expected[label] = {
             "count": len(subset),
-            "mean": round(mean(subset), 2),
-            "median": round(median(subset), 2),
+            "mean": round(mean(subset), 4),
+            "median": round(median(subset), 4),
         }
 
-    report = {
+    return {
         "samples": len(rows),
         "evaluations": len(results),
         "repeat": repeat,
-        "self_consistency_runs": self_consistency_runs,
         "status_distribution": dict(Counter(r["predicted"] for r in results)),
         "accuracy": accuracy,
-        "good_fit_precision": precision_good,
-        "good_fit_recall": recall_good,
-        "good_fit_false_positive_rate": (fp_good / len(with_expected)) if with_expected else None,
-        "zero_score_zero_confidence_rate": (zero_zero / len(results)) if results else None,
-        "unsupported_blocker_rate": (unsupported_blocker / len(results)) if results else None,
         "stability": stability,
-        "score_distribution_by_expected_excluding_prefilter": score_distribution_by_expected,
+        "score_distribution_by_expected": score_distribution_by_expected,
         "details": results,
     }
-    if include_fallback_stats:
-        report["fallback_rate"] = (len(fallback_rows) / len(results)) if results else None
-        report["fallback_reason_breakdown"] = dict(fallback_reasons)
-    return report
 
 
 def main() -> int:
@@ -177,22 +177,6 @@ def main() -> int:
         help="Path to JSONL/JSON dataset.",
     )
     parser.add_argument("--repeat", type=int, default=1, help="How many repeated runs per sample.")
-    parser.add_argument(
-        "--self-consistency-runs",
-        type=int,
-        default=3,
-        help="LLM self-consistency runs per classification call.",
-    )
-    parser.add_argument(
-        "--fast-eval",
-        action="store_true",
-        help="Fast mode: force self-consistency runs to 1 for quicker evaluation iterations.",
-    )
-    parser.add_argument(
-        "--include-fallback-stats",
-        action="store_true",
-        help="Include fallback_rate and fallback_reason_breakdown in the report output.",
-    )
     parser.add_argument("--output", default="tmp/opportunity_eval_report.json", help="Output JSON report path.")
     args = parser.parse_args()
 
@@ -204,7 +188,7 @@ def main() -> int:
     dataset_path = Path(args.dataset)
     if not dataset_path.exists():
         print(f"ERROR: Dataset not found: {dataset_path}")
-        print("Create a JSONL file with fields: title, description, deadline, expected_status")
+        print("Create a JSONL file with fields: title, description, expected_status")
         return 1
 
     rows = _load_dataset(dataset_path)
@@ -212,13 +196,7 @@ def main() -> int:
         print("ERROR: Dataset is empty.")
         return 1
 
-    self_consistency_runs = 1 if args.fast_eval else max(1, args.self_consistency_runs)
-    report = _evaluate(
-        rows,
-        repeat=max(1, args.repeat),
-        self_consistency_runs=self_consistency_runs,
-        include_fallback_stats=bool(args.include_fallback_stats),
-    )
+    report = _evaluate(rows, repeat=max(1, args.repeat))
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,3 +210,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
