@@ -1,11 +1,46 @@
-# Environments
-.env
-.venv
-env/
+# =========================
+# Python & Virtual Environments
+# =========================
+.venv/
 venv/
+env/
 ENV/
+*.bak/
 env.bak/
 venv.bak/
-s
+
+# Python Bytecode & Cache
 **/__pycache__/
 *.py[cod]
+*$py.class
+
+# =========================
+# React Frontend
+# =========================
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.pnp
+frontend/.pnp.js
+
+# Testing & Logs
+frontend/coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Environment & Secret Files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# System & Editor Files
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
