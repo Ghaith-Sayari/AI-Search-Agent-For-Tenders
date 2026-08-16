@@ -53,23 +53,8 @@ class BetaMrScraper(BaseScraper):
         return "Unknown"
 
     def _parse_location(self, text_block, clean_title):
-        if not text_block:
-            return "National / International"
-        lines = [line.strip() for line in text_block.split('\n') if line.strip()]
-        months = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc']
-        mauritian_places = ["nouakchott", "trarza", "brakna", "gorgol", "guidimagha", "hodh", "assaba", "adrar", "tagant", "inchiri", "nouadhibou", "tiszemmour", "rosso"]
-        
-        for line in lines:
-            if any(place in line.lower() for place in mauritian_places):
-                return line
-        for line in lines:
-            if line == clean_title or any(m in line.lower() for m in months) and any(char.isdigit() for char in line):
-                continue
-            if any(skip in line.lower() for skip in ["en savoir plus", "partager", "télécharger", "détails"]):
-                continue
-            if 1 <= len(line.split()) <= 4:
-                return line
-        return "National / International"
+        # Business rule: normalize Beta-MR country to a fixed value.
+        return "Mauritania"
 
     def fetch(self) -> list[dict]:
         """

@@ -204,6 +204,10 @@ def prepare_gatekeeper_item(
     summary["gatekeeper_current_index"] = index
     summary["gatekeeper_current_raw"] = raw_data
     summary["gatekeeper_current_record"] = record
+    # Reset per-item transient artifacts to avoid leaking state between iterations.
+    summary["gatekeeper_current_decision"] = None
+    summary["gatekeeper_current_saved_decision"] = None
+    summary["gatekeeper_current_published"] = None
     artifacts["summary"] = summary
 
     return {
@@ -263,8 +267,16 @@ def classify_gatekeeper_with_retry(
         error_type=type(last_exc).__name__ if last_exc else "RuntimeError",
         retry_count=max_retries,
     )
+    # Ensure downstream nodes do not reuse a previous item's decision.
+    artifacts = dict(state.get("artifacts", {}))
+    summary = dict(artifacts.get("summary", {}))
+    summary["gatekeeper_current_decision"] = None
+    summary["gatekeeper_current_saved_decision"] = None
+    summary["gatekeeper_current_published"] = None
+    artifacts["summary"] = summary
     return {
         **error_update,
+        "artifacts": artifacts,
         "status": {"current_node": "classify_gatekeeper_with_retry"},
     }
 
@@ -280,6 +292,15 @@ def persist_gatekeeper_decision(
     decision = summary.get("gatekeeper_current_decision")
     if decision is None:
         return {}
+    record = summary.get("gatekeeper_current_record")
+    if record is None or str(getattr(decision, "staging_tender_id", "")) != str(getattr(record, "id", "")):
+        return record_error(
+            state,
+            stage="gatekeeper.persist_decision",
+            unique_key=state.get("current", {}).get("unique_key"),
+            message="Skipped decision persistence because current decision does not match current staging record",
+            error_type="GatekeeperStateMismatch",
+        )
 
     saved = deps.decision_repository.save(decision)
     summary["gatekeeper_current_saved_decision"] = saved

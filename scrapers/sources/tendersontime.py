@@ -36,7 +36,12 @@ class TendersOnTimeScraper(BaseScraper):
             
             # --- ÉTAPE 1 : COLLECTE LIMITÉE À 50 OFFRES ---
             print(f"2. Récupération des 50 derniers liens sur : {self.URL_CIBLE}...")
-            await page.goto(self.URL_CIBLE, wait_until="networkidle", timeout=60000)
+            try:
+                # `networkidle` can hang on pages with long-polling/ads.
+                await page.goto(self.URL_CIBLE, wait_until="domcontentloaded", timeout=45000)
+            except Exception:
+                # One fallback attempt with a less strict readiness condition.
+                await page.goto(self.URL_CIBLE, wait_until="load", timeout=60000)
             
             preliminary_tenders = []
             seen_references = set()
