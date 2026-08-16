@@ -13,18 +13,28 @@ import {
 
 interface SettingsPageProps {
   profile: CompanyProfile;
-  onSaveProfile: (updated: CompanyProfile) => void;
+  onSaveProfile: (updated: CompanyProfile) => Promise<void>;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ profile, onSaveProfile }) => {
   const [formData, setFormData] = useState<CompanyProfile>({ ...profile });
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    setFormData({ ...profile });
+  }, [profile]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveProfile(formData);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setSaveError(null);
+    try {
+      await onSaveProfile(formData);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save profile.');
+    }
   };
 
   return (
@@ -47,6 +57,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ profile, onSaveProfi
           </div>
         )}
       </div>
+
+      {saveError && (
+        <div className="px-3 py-2 rounded-md border border-red-300 bg-red-50 text-red-800 text-xs font-semibold">
+          {saveError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Company Identity */}
@@ -75,6 +91,48 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ profile, onSaveProfi
                 type="text"
                 value={formData.primarySector}
                 onChange={(e) => setFormData({ ...formData, primarySector: e.target.value })}
+                className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#86BC25]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-600 font-bold mb-1 text-xs">Company Description</label>
+            <textarea
+              rows={3}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#86BC25]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block text-slate-600 font-bold mb-1">Sub-Sectors (comma separated)</label>
+              <input
+                type="text"
+                value={formData.subSectors.join(', ')}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    subSectors: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                  })
+                }
+                className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#86BC25]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-600 font-bold mb-1">Core Services (comma separated)</label>
+              <input
+                type="text"
+                value={formData.coreServices.join(', ')}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    coreServices: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                  })
+                }
                 className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#86BC25]"
               />
             </div>

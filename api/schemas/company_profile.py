@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 
 
 class CompanyProfile(BaseModel):
+    id: str = "default"
     name: str = "Default Organization"
+    description: str = ""
     primarySector: str = ""
     subSectors: list[str] = Field(default_factory=list)
     coreServices: list[str] = Field(default_factory=list)

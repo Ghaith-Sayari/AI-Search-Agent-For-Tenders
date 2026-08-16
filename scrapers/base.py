@@ -36,7 +36,12 @@ class BaseScraper(ABC):
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         
-        print(f"[{self.source_name}] Alerting Redis queue about new file...")
-        process_raw_file_task.delay(file_path, source_name=self.source_name)
+        # Optional async hand-off to Celery/Redis.
+        # Pipeline runs can work without Celery; queue failures should not break scraping.
+        try:
+            print(f"[{self.source_name}] Alerting Redis queue about new file...")
+            process_raw_file_task.delay(file_path, source_name=self.source_name)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[{self.source_name}] Queue handoff skipped (Celery/Redis unavailable): {exc}")
             
         return file_path

@@ -93,7 +93,10 @@ def _call_ollama(prompt: str) -> str:
             if attempt < config.llm.max_retries:
                 time.sleep(config.llm.retry_backoff_seconds * attempt)
 
-    raise ProposalLLMError(f"LLM call failed after retries: {last_err}")
+    raise ProposalLLMError(
+        f"LLM call failed after {config.llm.max_retries} retries "
+        f"(model='{config.llm.model}', endpoint='{endpoint}'): {last_err}"
+    )
 
 
 def generate_section_text(

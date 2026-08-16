@@ -10,7 +10,9 @@ import {
 } from '../types';
 
 export const INITIAL_COMPANY_PROFILE: CompanyProfile = {
+  id: "default",
   name: "Deloitte Digital & Advisory EMEA",
+  description: "Digital transformation and advisory practice focused on public-sector and enterprise modernization.",
   primarySector: "Management Consulting & Digital Transformation",
   subSectors: [
     "IT Consulting & Architecture",
@@ -844,4 +846,3 @@ export const INITIAL_PROPOSALS: Proposal[] = [
     ]
   }
 ];
-

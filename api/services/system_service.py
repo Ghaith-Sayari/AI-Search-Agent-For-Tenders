@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -26,6 +27,34 @@ def _utc_now() -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat()
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        # Accept timestamps with non-standard fractional precision by truncating/padding
+        # to microseconds (max 6 digits) before re-parsing.
+        m = re.match(r"^(?P<head>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(?P<frac>\d+))?(?P<tz>[+-]\d{2}:\d{2})?$", normalized)
+        if not m:
+            return None
+        head = m.group("head")
+        frac = (m.group("frac") or "")
+        tz = m.group("tz") or "+00:00"
+        frac6 = (frac[:6]).ljust(6, "0")
+        try:
+            dt = datetime.fromisoformat(f"{head}.{frac6}{tz}")
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _service_check(name: str, fn: Any) -> SystemService:
@@ -99,7 +128,7 @@ class SystemServiceLayer:
         runs = [
             r
             for r in list_runs()
-            if datetime.fromisoformat(r.startedAt.replace("Z", "+00:00")) >= period_start
+            if (_parse_iso_datetime(r.startedAt) or datetime.min.replace(tzinfo=timezone.utc)) >= period_start
         ]
 
         llm_calls = sum(int(r.llmCallsCount or 0) for r in runs)

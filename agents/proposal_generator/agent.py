@@ -91,25 +91,41 @@ class ProposalGeneratorAgent:
         )
 
     def load_input_from_db(self, *, analyzed_tender_id: str, profile_id: str) -> ProposalInput:
-        tender_row = (
+        tender_rows = (
             self.client.table(self.settings.source_table)
             .select("*")
             .eq("id", analyzed_tender_id)
-            .single()
+            .limit(1)
             .execute()
             .data
+            or []
         )
+        tender_row = tender_rows[0] if tender_rows else None
         if not tender_row:
             raise ValueError(f"Analyzed tender '{analyzed_tender_id}' not found in {self.settings.source_table}")
 
-        profile_row = (
+        profile_rows = (
             self.client.table(self.settings.profiles_table)
             .select("*")
             .eq("id", profile_id)
-            .single()
+            .limit(1)
             .execute()
             .data
+            or []
         )
+        profile_row = profile_rows[0] if profile_rows else None
+        if not profile_row and profile_id.strip().lower() == "default":
+            # Backward-compatible fallback for environments where the default profile
+            # row was not initialized in DB yet.
+            profile_row = {
+                "id": "default",
+                "name": "Default Organization",
+                "description": "",
+                "sectors": [],
+                "keywords": [],
+                "locations": [],
+                "max_budget": None,
+            }
         if not profile_row:
             raise ValueError(f"Profile '{profile_id}' not found in {self.settings.profiles_table}")
 

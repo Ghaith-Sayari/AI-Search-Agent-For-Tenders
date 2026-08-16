@@ -6,33 +6,12 @@ import {
   SystemIncident,
   CostMetrics,
   CompanyProfile,
-  DecisionStatus,
   Proposal,
   CreateProposalPayload,
   ProposalSection,
   ProposalQualityMetrics,
+  DecisionStatus,
 } from '../types';
-
-import {
-  INITIAL_COMPANY_PROFILE,
-  INITIAL_OPPORTUNITIES,
-  INITIAL_REVIEWS,
-  INITIAL_RUNS,
-  INITIAL_SYSTEM_SERVICES,
-  INITIAL_SYSTEM_INCIDENTS,
-  INITIAL_COST_METRICS,
-  INITIAL_PROPOSALS,
-} from './mockData';
-
-// Persistent in-memory reactive mock storage
-let opportunitiesStore: Opportunity[] = [...INITIAL_OPPORTUNITIES];
-let reviewsStore: ReviewItem[] = [...INITIAL_REVIEWS];
-let runsStore: PipelineRun[] = [...INITIAL_RUNS];
-let systemServicesStore: SystemService[] = [...INITIAL_SYSTEM_SERVICES];
-let incidentsStore: SystemIncident[] = [...INITIAL_SYSTEM_INCIDENTS];
-let costMetricsStore: CostMetrics = { ...INITIAL_COST_METRICS };
-let companyProfileStore: CompanyProfile = { ...INITIAL_COMPANY_PROFILE };
-let proposalsStore: Proposal[] = [...INITIAL_PROPOSALS];
 
 export interface FetchOpportunitiesParams {
   search?: string;
@@ -41,551 +20,493 @@ export interface FetchOpportunitiesParams {
   decision?: string;
   minScore?: number;
   maxScore?: number;
-  sortBy?: 'score' | 'deadline' | 'published';
+  sortBy?: 'score' | 'deadline' | 'published' | 'lastAnalyzedAt';
   sortOrder?: 'asc' | 'desc';
+  limit?: number;
 }
 
+const API_BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+
+function toQuery(params: Record<string, unknown>): string {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
+  });
+  const q = search.toString();
+  return q ? `?${q}` : '';
+}
+
+async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    ...init,
+  });
+
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!res.ok) {
+    const detail = (data && (data.detail || data.message)) || `HTTP ${res.status}`;
+    throw new Error(String(detail));
+  }
+  return data as T;
+}
+
+const toDecisionStatus = (value: string | undefined | null): DecisionStatus => {
+  const raw = (value || '').toUpperCase();
+  if (raw === 'GOOD_FIT' || raw === 'NEEDS_REVIEW' || raw === 'NOT_FIT' || raw === 'FAILED') return raw;
+  if (raw === 'PURSUE' || raw === 'APPROVED') return 'GOOD_FIT';
+  if (raw === 'REJECT' || raw === 'REJECTED' || raw === 'EXPIRED') return 'NOT_FIT';
+  return 'NEEDS_REVIEW';
+};
+
+const mapOpportunity = (o: any): Opportunity => ({
+  id: String(o.id || ''),
+  title: String(o.title || ''),
+  externalId: String(o.externalId || o.external_id || ''),
+  source: String(o.source || ''),
+  sourceUrl: String(o.sourceUrl || o.source_url || o.url || ''),
+  country: String(o.country || ''),
+  countryCode: String(o.countryCode || o.country_code || ''),
+  sector: String(o.sector || ''),
+  estimatedValue: String(o.estimatedValue || o.estimated_value || ''),
+  publishedDate: String(o.publishedDate || o.published_date || o.created_at || ''),
+  deadline: String(o.deadline || ''),
+  lastAnalyzedAt: String(o.lastAnalyzedAt || o.last_analyzed_at || o.processed_at || ''),
+  overallScore: Number(o.overallScore ?? o.total_score ?? o.score ?? 0),
+  decision: toDecisionStatus(o.decision),
+  confidence: Number(o.confidence ?? o.confidence_score ?? 0),
+  analysisStatus: (String(o.analysisStatus || o.analysis_status || 'COMPLETED').toUpperCase() as any),
+  scoreBreakdown: {
+    sectorRelevance: Number(o.scoreBreakdown?.sectorRelevance ?? o.score_breakdown?.sectorRelevance ?? 0),
+    servicesRelevance: Number(o.scoreBreakdown?.servicesRelevance ?? o.score_breakdown?.servicesRelevance ?? 0),
+    geographyRelevance: Number(o.scoreBreakdown?.geographyRelevance ?? o.score_breakdown?.geographyRelevance ?? 0),
+    eligibilityFit: Number(o.scoreBreakdown?.eligibilityFit ?? o.score_breakdown?.eligibilityFit ?? 0),
+    strategicFit: Number(o.scoreBreakdown?.strategicFit ?? o.score_breakdown?.strategicFit ?? 0),
+  },
+  aiReasoning: {
+    matched: Array.isArray(o.aiReasoning?.matched) ? o.aiReasoning.matched : [],
+    missingOrRisk: Array.isArray(o.aiReasoning?.missingOrRisk) ? o.aiReasoning.missingOrRisk : [],
+    recommendation: String(o.aiReasoning?.recommendation || ''),
+  },
+  description: String(o.description || ''),
+  requirements: Array.isArray(o.requirements) ? o.requirements : [],
+  eligibilityCriteria: Array.isArray(o.eligibilityCriteria || o.eligibility_criteria)
+    ? (o.eligibilityCriteria || o.eligibility_criteria)
+    : [],
+  profileName: String(o.profileName || ''),
+});
+
+const mapReview = (r: any): ReviewItem => ({
+  id: String(r.id || ''),
+  opportunityId: String(r.opportunityId || r.opportunity_id || ''),
+  opportunityTitle: String(r.opportunityTitle || r.opportunity_title || ''),
+  country: String(r.country || ''),
+  source: String(r.source || ''),
+  reviewType: (String(r.reviewType || r.review_type || 'GATEKEEPER').toUpperCase() as any),
+  aiDecision: toDecisionStatus(r.aiDecision || r.ai_decision || r.decision),
+  score: Number(r.score ?? 0),
+  confidence: Number(r.confidence ?? 0),
+  reason: String(r.reason || ''),
+  createdAt: String(r.createdAt || r.created_at || r.auditTrail?.[0]?.timestamp || r.resolvedAt || new Date().toISOString()),
+  priority: (String(r.priority || 'MEDIUM').toUpperCase() as any),
+  assignee: r.assignee ?? null,
+  status: (String(r.status || 'OPEN').toUpperCase() as any),
+  resolvedAt: r.resolvedAt || r.resolved_at,
+  resolvedBy: r.resolvedBy || r.resolved_by,
+  overrideReason: r.overrideReason || r.override_reason,
+  auditTrail: Array.isArray(r.auditTrail)
+    ? r.auditTrail.map((a: any) => ({
+        timestamp: String(a.timestamp || ''),
+        action: String(a.action || ''),
+        actor: String(a.actor || ''),
+        notes: a.notes ? String(a.notes) : undefined,
+      }))
+    : [],
+});
+
+const mapRun = (r: any): PipelineRun => ({
+  id: String(r.id || ''),
+  triggeredBy: String(r.triggeredBy || r.triggered_by || 'api'),
+  startedAt: String(r.startedAt || r.started_at || ''),
+  completedAt: r.completedAt || r.completed_at,
+  durationSeconds: Number(r.durationSeconds ?? r.duration_seconds ?? 0),
+  currentStage: (String(r.currentStage || r.current_stage || 'INGESTION').toUpperCase() as any),
+  processedCount: Number(r.processedCount ?? r.processed_count ?? 0),
+  approvedCount: Number(r.approvedCount ?? r.approved_count ?? 0),
+  reviewCount: Number(r.reviewCount ?? r.review_count ?? 0),
+  failedCount: Number(r.failedCount ?? r.failed_count ?? 0),
+  llmCallsCount: Number(r.llmCallsCount ?? r.llm_calls_count ?? 0),
+  status: (String(r.status || 'QUEUED').toUpperCase() as any),
+  stages: Array.isArray(r.stages)
+    ? r.stages.map((s: any) => ({
+        stage: String(s.stage || 'INGESTION').toUpperCase() as any,
+        label: String(s.label || s.stage || ''),
+        status: String(s.status || 'PENDING').toUpperCase() as any,
+        durationSeconds: Number(s.durationSeconds ?? s.duration_seconds ?? 0),
+        processedCount: Number(s.processedCount ?? s.processed_count ?? 0),
+        errorsCount: Number(s.errorsCount ?? s.errors_count ?? 0),
+        retryCount: Number(s.retryCount ?? s.retry_count ?? 0),
+        details: typeof s.details === 'string' ? s.details : s.details ? JSON.stringify(s.details) : undefined,
+      }))
+    : [],
+});
+
+const mapSystemService = (s: any, idx: number): SystemService => {
+  const name = String(s.name || `service-${idx + 1}`);
+  const lowered = name.toLowerCase();
+  let category: SystemService['category'] = 'AI / Agent';
+  if (lowered.includes('ingest') || lowered.includes('scrap')) category = 'Ingestion';
+  else if (lowered.includes('queue') || lowered.includes('redis')) category = 'Queue';
+  else if (lowered.includes('db') || lowered.includes('supabase')) category = 'Database';
+  else if (lowered.includes('storage')) category = 'Storage';
+
+  const statusRaw = String(s.status || 'DOWN').toUpperCase();
+  const status: SystemService['status'] = statusRaw === 'UP' ? 'HEALTHY' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'DOWN';
+
+  return {
+    id: String(s.id || name),
+    name,
+    category,
+    status,
+    latencyMs: Number(s.latencyMs ?? s.latency_ms ?? 0),
+    lastSuccessfulExecution: String(s.lastCheckedAt || s.last_checked_at || ''),
+    errorCount24h: Number(s.errorCount24h ?? 0),
+    uptimePercent: Number(s.uptimePercent ?? 100),
+    details: typeof s.details === 'string' ? s.details : JSON.stringify(s.details || {}),
+  };
+};
+
+const mapIncident = (i: any): SystemIncident => {
+  const sev = String(i.severity || '').toUpperCase();
+  const mappedSeverity: SystemIncident['severity'] = sev === 'CRITICAL' || sev === 'HIGH' ? 'CRITICAL' : sev === 'LOW' || sev === 'INFO' ? 'INFO' : 'WARNING';
+  return {
+    id: String(i.id || ''),
+    timestamp: String(i.timestamp || i.createdAt || i.created_at || ''),
+    service: String(i.service || ''),
+    severity: mappedSeverity,
+    message: String(i.message || ''),
+    resolved: String(i.status || '').toUpperCase() === 'RESOLVED' || Boolean(i.resolved),
+  };
+};
+
+const mapCostMetrics = (m: any): CostMetrics => {
+  const llmCalls = Number(m.llmCalls ?? m.totalLlmCalls ?? 0);
+  const inputTokens = Number(m.promptTokens ?? m.inputTokens ?? 0);
+  const outputTokens = Number(m.completionTokens ?? m.outputTokens ?? 0);
+  const estimatedCostUsd = Number(m.estimatedCostUsd ?? m.estimated_cost_usd ?? 0);
+  const byStage = Array.isArray(m.byStage) ? m.byStage : [];
+  return {
+    totalLlmCalls: llmCalls,
+    inputTokens,
+    outputTokens,
+    estimatedCostUsd,
+    costPerOpportunityUsd: Number(m.costPerOpportunityUsd ?? 0),
+    avgTokensPerRequest: llmCalls > 0 ? (inputTokens + outputTokens) / llmCalls : 0,
+    cacheHitRatePercent: Number(m.cacheHitRatePercent ?? 0),
+    llmCallsAvoidedByRules: Number(m.llmCallsAvoidedByRules ?? 0),
+    retryCount: Number(m.retryCount ?? 0),
+    avgPromptSizeTokens: Number(m.avgPromptSizeTokens ?? 0),
+    callsByStage: byStage.map((s: any) => ({
+      stage: String(s.stage || ''),
+      calls: Number(s.llmCalls ?? s.calls ?? 0),
+      cost: Number(s.estimatedCostUsd ?? s.cost ?? 0),
+    })),
+    costOverTime: Array.isArray(m.costOverTime) ? m.costOverTime : [],
+    tokensOverTime: Array.isArray(m.tokensOverTime) ? m.tokensOverTime : [],
+    costPerOpportunityTrend: Array.isArray(m.costPerOpportunityTrend) ? m.costPerOpportunityTrend : [],
+  };
+};
+
+const mapCompanyProfile = (p: any): CompanyProfile => ({
+  id: String(p.id || 'default'),
+  name: String(p.name || ''),
+  description: String(p.description || ''),
+  primarySector: String(p.primarySector || ''),
+  subSectors: Array.isArray(p.subSectors) ? p.subSectors : [],
+  coreServices: Array.isArray(p.coreServices) ? p.coreServices : [],
+  targetCountries: Array.isArray(p.targetCountries) ? p.targetCountries : [],
+  minContractValueEur: Number(p.minContractValueEur ?? 0),
+  maxContractValueEur: Number(p.maxContractValueEur ?? 0),
+  certifications: Array.isArray(p.certifications) ? p.certifications : [],
+  gatekeeperMinScore: Number(p.gatekeeperMinScore ?? 50),
+  autoApproveThreshold: Number(p.autoApproveThreshold ?? 75),
+});
+
+const toAiConfidenceLabel = (v: any): 'High' | 'Medium' | 'Low' => {
+  if (typeof v === 'string') {
+    const s = v.toLowerCase();
+    if (s === 'high' || s === 'medium' || s === 'low') return s[0].toUpperCase() as 'High' | 'Medium' | 'Low';
+  }
+  const n = Number(v ?? 0);
+  if (n >= 75) return 'High';
+  if (n >= 45) return 'Medium';
+  return 'Low';
+};
+
+const mapProposal = (p: any): Proposal => ({
+  id: String(p.id || ''),
+  opportunityId: String(p.opportunityId || p.opportunity_id || ''),
+  opportunityTitle: String(p.opportunityTitle || p.opportunity_title || ''),
+  country: String(p.country || ''),
+  source: String(p.source || ''),
+  deadline: String(p.deadline || ''),
+  overallScore: Number(p.overallScore ?? p.total_score ?? 0),
+  decision: toDecisionStatus(p.decision),
+  confidence: Number(p.confidence ?? p.qualityMetrics?.aiConfidence ?? 0),
+  status: (String(p.status || 'DRAFT').toUpperCase() as any),
+  createdAt: String(p.createdAt || p.created_at || p.generated_at || ''),
+  updatedAt: String(p.updatedAt || p.updated_at || p.generated_at || ''),
+  config: {
+    title: String(p.config?.title || ''),
+    companyProfileId: String(p.config?.companyProfileId || ''),
+    companyProfileName: String(p.config?.companyProfileName || ''),
+    language: (p.config?.language || 'English') as any,
+    proposalType: (p.config?.proposalType || 'Technical Proposal') as any,
+    tone: (p.config?.tone || 'Professional') as any,
+    additionalInstructions: String(p.config?.additionalInstructions || ''),
+  },
+  sections: Array.isArray(p.sections)
+    ? p.sections.map((s: any) => ({
+        id: String(s.id || ''),
+        title: String(s.title || ''),
+        content: String(s.content || ''),
+        status: (String(s.status || 'GENERATED').toUpperCase() as any),
+        lastUpdated: String(s.lastUpdated || s.last_updated || ''),
+      }))
+    : [],
+  qualityMetrics: {
+    tenderAlignment: Number(p.qualityMetrics?.tenderAlignment ?? 0),
+    requirementCoverage: Number(p.qualityMetrics?.requirementCoverage ?? 0),
+    companyCapabilityAlignment: Number(p.qualityMetrics?.companyCapabilityAlignment ?? 0),
+    completeness: Number(p.qualityMetrics?.completeness ?? 0),
+    missingInformation: Array.isArray(p.qualityMetrics?.missingInformation)
+      ? p.qualityMetrics.missingInformation
+      : [],
+    aiConfidence: toAiConfidenceLabel(p.qualityMetrics?.aiConfidence),
+  },
+  requirementsSummary: {
+    keyRequirements: Array.isArray(p.requirementsSummary?.keyRequirements)
+      ? p.requirementsSummary.keyRequirements
+      : [],
+    eligibilityRequirements: Array.isArray(p.requirementsSummary?.eligibilityRequirements)
+      ? p.requirementsSummary.eligibilityRequirements
+      : [],
+    deliverables: Array.isArray(p.requirementsSummary?.deliverables)
+      ? p.requirementsSummary.deliverables
+      : [],
+    evaluationCriteria: Array.isArray(p.requirementsSummary?.evaluationCriteria)
+      ? p.requirementsSummary.evaluationCriteria
+      : [],
+    importantDates: {
+      submissionDeadline: String(p.requirementsSummary?.importantDates?.submissionDeadline || ''),
+      clarificationDeadline: String(p.requirementsSummary?.importantDates?.clarificationDeadline || ''),
+    },
+  },
+});
+
 export const apiService = {
-  // Opportunities REST API Abstraction: GET /v1/opportunities
   async getOpportunities(params?: FetchOpportunitiesParams): Promise<Opportunity[]> {
-    await new Promise((resolve) => setTimeout(resolve, 150)); // simulate slight network latency
-    let result = [...opportunitiesStore];
-
-    if (params?.search) {
-      const q = params.search.toLowerCase();
-      result = result.filter(
-        (o) =>
-          o.title.toLowerCase().includes(q) ||
-          o.description.toLowerCase().includes(q) ||
-          o.sector.toLowerCase().includes(q) ||
-          o.externalId.toLowerCase().includes(q)
-      );
-    }
-
-    if (params?.country && params.country !== 'ALL') {
-      result = result.filter((o) => o.country === params.country || o.countryCode === params.country);
-    }
-
-    if (params?.source && params.source !== 'ALL') {
-      result = result.filter((o) => o.source.toLowerCase().includes(params.source!.toLowerCase()));
-    }
-
-    if (params?.decision && params.decision !== 'ALL') {
-      result = result.filter((o) => o.decision === params.decision);
-    }
-
-    if (params?.minScore !== undefined) {
-      result = result.filter((o) => o.overallScore >= params.minScore!);
-    }
-
-    if (params?.maxScore !== undefined) {
-      result = result.filter((o) => o.overallScore <= params.maxScore!);
-    }
-
-    if (params?.sortBy) {
-      result.sort((a, b) => {
-        let valA: number | string = 0;
-        let valB: number | string = 0;
-        if (params.sortBy === 'score') {
-          valA = a.overallScore;
-          valB = b.overallScore;
-        } else if (params.sortBy === 'deadline') {
-          valA = a.deadline;
-          valB = b.deadline;
-        } else if (params.sortBy === 'published') {
-          valA = a.publishedDate;
-          valB = b.publishedDate;
-        }
-        if (valA < valB) return params.sortOrder === 'asc' ? -1 : 1;
-        if (valA > valB) return params.sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return result;
+    const decisionParam = params?.decision && params.decision !== 'ALL' ? params.decision : undefined;
+    const data = await http<any[]>(
+      `/v1/opportunities${toQuery({
+        search: params?.search,
+        country: params?.country && params.country !== 'ALL' ? params.country : undefined,
+        source: params?.source && params.source !== 'ALL' ? params.source : undefined,
+        decision: decisionParam,
+        minScore: params?.minScore,
+        maxScore: params?.maxScore,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+        limit: params?.limit,
+      })}`
+    );
+    return Array.isArray(data) ? data.map(mapOpportunity) : [];
   },
 
-  // GET /v1/opportunities/:opportunity_id
   async getOpportunityById(id: string): Promise<Opportunity | null> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return opportunitiesStore.find((o) => o.id === id) || null;
+    try {
+      const data = await http<any>(`/v1/opportunities/${id}`);
+      return mapOpportunity(data);
+    } catch {
+      return null;
+    }
   },
 
-  // POST /v1/opportunities/:opportunity_id/analyze
   async runOpportunityAnalysis(id: string): Promise<Opportunity> {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const index = opportunitiesStore.findIndex((o) => o.id === id);
-    if (index === -1) throw new Error('Opportunity not found');
-
-    const updated = {
-      ...opportunitiesStore[index],
-      lastAnalyzedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      analysisStatus: 'COMPLETED' as const,
-    };
-    opportunitiesStore[index] = updated;
-    return updated;
+    try {
+      const data = await http<any>(`/v1/opportunities/${id}/analyze`, { method: 'POST' });
+      return mapOpportunity(data);
+    } catch {
+      // fallback while endpoint is being finalized
+      const existing = await this.getOpportunityById(id);
+      if (!existing) throw new Error('Opportunity not found');
+      return {
+        ...existing,
+        lastAnalyzedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        analysisStatus: 'COMPLETED',
+      };
+    }
   },
 
-  // GET /v1/analyses
   async getAnalyses(params?: FetchOpportunitiesParams): Promise<Opportunity[]> {
     return this.getOpportunities(params);
   },
 
-  // GET /v1/reviews
   async getReviews(): Promise<ReviewItem[]> {
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    return [...reviewsStore];
+    const data = await http<any[]>('/v1/reviews');
+    return Array.isArray(data) ? data.map(mapReview) : [];
   },
 
-  // POST /v1/reviews/:review_id/resolve
   async resolveReview(
     reviewId: string,
     action: 'APPROVE' | 'REJECT' | 'SEND_BACK',
     overrideReason: string,
     actorName: string = 'Current User'
   ): Promise<ReviewItem> {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const index = reviewsStore.findIndex((r) => r.id === reviewId);
-    if (index === -1) throw new Error('Review item not found');
-
-    const current = reviewsStore[index];
-    const statusMap = {
-      APPROVE: 'RESOLVED_APPROVED' as const,
-      REJECT: 'RESOLVED_REJECTED' as const,
-      SEND_BACK: 'RESOLVED_SENT_BACK' as const,
-    };
-
-    const newStatus = statusMap[action];
-    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    const updatedReview: ReviewItem = {
-      ...current,
-      status: newStatus,
-      resolvedAt: timestamp,
-      resolvedBy: actorName,
-      overrideReason,
-      auditTrail: [
-        ...current.auditTrail,
-        {
-          timestamp,
-          action: `Human Resolution: ${action}`,
-          actor: actorName,
-          notes: `Reason provided: ${overrideReason}`,
-        },
-      ],
-    };
-
-    reviewsStore[index] = updatedReview;
-
-    // Update corresponding opportunity decision in store if approved or rejected
-    const oppIndex = opportunitiesStore.findIndex((o) => o.id === current.opportunityId);
-    if (oppIndex !== -1) {
-      let newDecision: DecisionStatus = opportunitiesStore[oppIndex].decision;
-      if (action === 'APPROVE') newDecision = 'GOOD_FIT';
-      if (action === 'REJECT') newDecision = 'NOT_FIT';
-      opportunitiesStore[oppIndex] = {
-        ...opportunitiesStore[oppIndex],
-        decision: newDecision,
-      };
-    }
-
-    return updatedReview;
+    const data = await http<any>(`/v1/reviews/${reviewId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action, overrideReason, actorName }),
+    });
+    return mapReview(data);
   },
 
-  // GET /v1/runs
   async getPipelineRuns(): Promise<PipelineRun[]> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return [...runsStore];
+    const data = await http<any[]>('/v1/runs');
+    return Array.isArray(data) ? data.map(mapRun) : [];
   },
 
-  // GET /v1/runs/:run_id
   async getRunById(id: string): Promise<PipelineRun | null> {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    return runsStore.find((r) => r.id === id) || null;
+    try {
+      const data = await http<any>(`/v1/runs/${id}`);
+      return mapRun(data);
+    } catch {
+      return null;
+    }
   },
 
-  // POST /v1/runs
   async triggerPipelineRun(triggerName: string = 'Manual Dashboard Trigger'): Promise<PipelineRun> {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const newId = `run-${Date.now().toString().slice(-6)}`;
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    const newRun: PipelineRun = {
-      id: newId,
-      triggeredBy: triggerName,
-      startedAt: nowStr,
-      durationSeconds: 15,
-      currentStage: 'INGESTION',
-      processedCount: 18,
-      approvedCount: 3,
-      reviewCount: 1,
-      failedCount: 0,
-      llmCallsCount: 22,
-      status: 'RUNNING',
-      stages: [
-        { stage: 'INGESTION', label: 'Tender Ingestion', status: 'RUNNING', durationSeconds: 5, processedCount: 18, errorsCount: 0, retryCount: 0, details: "Fetching active sources..." },
-        { stage: 'NORMALIZATION', label: 'Document Normalization', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-        { stage: 'GATEKEEPER', label: 'AI Gatekeeper Qualification', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-        { stage: 'PRODUCTION', label: 'Data Enrichment', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-        { stage: 'OPPORTUNITY_ANALYSIS', label: 'AI Fit Analysis & Scoring', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-        { stage: 'REVIEW', label: 'Review Queue Routing', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-        { stage: 'COMPLETED', label: 'Run Completion', status: 'PENDING', durationSeconds: 0, processedCount: 0, errorsCount: 0, retryCount: 0 },
-      ],
-    };
-
-    runsStore = [newRun, ...runsStore];
-    return newRun;
+    const data = await http<any>('/v1/runs', {
+      method: 'POST',
+      body: JSON.stringify({ triggerName }),
+    });
+    return mapRun(data);
   },
 
-  // GET /v1/agents/status
   async getSystemHealth(): Promise<{ services: SystemService[]; incidents: SystemIncident[] }> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const data = await http<any>('/v1/agents/status');
     return {
-      services: [...systemServicesStore],
-      incidents: [...incidentsStore],
+      services: Array.isArray(data?.services) ? data.services.map(mapSystemService) : [],
+      incidents: Array.isArray(data?.incidents) ? data.incidents.map(mapIncident) : [],
     };
   },
 
-  // GET /v1/metrics/cost
   async getCostMetrics(): Promise<CostMetrics> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return { ...costMetricsStore };
+    const data = await http<any>('/v1/metrics/cost');
+    return mapCostMetrics(data || {});
   },
 
-  // Company Profile
   async getCompanyProfile(): Promise<CompanyProfile> {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    return { ...companyProfileStore };
+    const data = await http<any>('/v1/company-profile');
+    return mapCompanyProfile(data || {});
   },
 
   async updateCompanyProfile(profile: CompanyProfile): Promise<CompanyProfile> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    companyProfileStore = { ...profile };
-    return { ...companyProfileStore };
+    const data = await http<any>('/v1/company-profile', {
+      method: 'PUT',
+      body: JSON.stringify(profile),
+    });
+    return mapCompanyProfile(data || {});
   },
 
-  // Proposals REST API Abstraction
-  // GET /v1/proposals
   async getProposals(): Promise<Proposal[]> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return [...proposalsStore];
+    const data = await http<any[]>('/v1/proposals');
+    return Array.isArray(data) ? data.map(mapProposal) : [];
   },
 
-  // GET /v1/proposals/:proposal_id
   async getProposalById(id: string): Promise<Proposal | null> {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    return proposalsStore.find((p) => p.id === id) || null;
+    try {
+      const data = await http<any>(`/v1/proposals/${id}`);
+      return mapProposal(data);
+    } catch {
+      return null;
+    }
   },
 
-  // POST /v1/proposals
   async createProposal(payload: CreateProposalPayload): Promise<Proposal> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    const opportunity = opportunitiesStore.find((o) => o.id === payload.opportunityId);
-    if (!opportunity) throw new Error('Target opportunity not found');
-
-    const newId = `prop-${Date.now().toString().slice(-6)}`;
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    const defaultSections: ProposalSection[] = [
-      { id: 'sec-exec', title: 'Executive Summary', content: `Executive summary draft for ${opportunity.title}...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-req', title: 'Understanding of Requirements', content: `Analysis of key specifications for ${opportunity.title}...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-comp', title: 'Company Profile', content: `Profile overview for ${payload.companyProfileName}...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-approach', title: 'Proposed Approach', content: `Proposed technical and strategic methodology...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-method', title: 'Methodology', content: `Deloitte Agile Public Sector delivery framework...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-tech', title: 'Technical Solution', content: `Architecture and technological stack specifications...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-plan', title: 'Project Plan', content: `Milestones and delivery schedule...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-team', title: 'Team & Expertise', content: `Personnel allocation and subject matter expert qualifications...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-deliv', title: 'Deliverables', content: `Formal scope artifacts and acceptance documentation...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-qa', title: 'Quality Assurance', content: `Quality control protocols, CI/CD testing, and oversight...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-risk', title: 'Risk Management', content: `Risk identification matrix and mitigation strategies...`, status: 'GENERATED', lastUpdated: nowStr },
-      { id: 'sec-concl', title: 'Conclusion', content: `Concluding statement and value proposition...`, status: 'GENERATED', lastUpdated: nowStr },
-    ];
-
-    const newProposal: Proposal = {
-      id: newId,
-      opportunityId: opportunity.id,
-      opportunityTitle: opportunity.title,
-      country: opportunity.country,
-      source: opportunity.source,
-      deadline: opportunity.deadline,
-      overallScore: opportunity.overallScore,
-      decision: opportunity.decision,
-      status: 'DRAFT',
-      createdAt: nowStr,
-      updatedAt: nowStr,
-      config: {
-        title: payload.proposalTitle || `Proposal: ${opportunity.title}`,
-        companyProfileId: payload.companyProfileId,
-        companyProfileName: payload.companyProfileName,
-        language: payload.language,
-        proposalType: payload.proposalType,
-        tone: payload.tone,
-        additionalInstructions: payload.additionalInstructions || '',
-      },
-      qualityMetrics: {
-        tenderAlignment: Math.min(98, opportunity.overallScore + 2),
-        requirementCoverage: 88,
-        companyCapabilityAlignment: 92,
-        missingInformation: [
-          'Detailed pricing rate schedule',
-          'Specific localized partner SLAs',
-          'Named CV references for secondary roles'
-        ],
-        aiConfidence: opportunity.overallScore >= 85 ? 'High' : 'Medium',
-      },
-      requirementsSummary: {
-        keyRequirements: opportunity.requirements.length > 0 ? opportunity.requirements : ['Information not available'],
-        eligibilityRequirements: opportunity.eligibilityCriteria.length > 0 ? opportunity.eligibilityCriteria : ['Information not available'],
-        deliverables: [
-          'Project Charter & Inception Document',
-          'Architecture & Security Blueprint',
-          'Core Solution Release Package',
-          'Operations & Handover Documentation'
-        ],
-        importantDates: {
-          submissionDeadline: opportunity.deadline,
-          clarificationDeadline: 'Information not available'
-        }
-      },
-      sections: defaultSections,
-    };
-
-    proposalsStore = [newProposal, ...proposalsStore];
-    return newProposal;
+    const data = await http<any>('/v1/proposals', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapProposal(data);
   },
 
-  // POST /v1/proposals/:proposal_id/generate
   async generateProposal(
     proposalId: string,
     onStageUpdate?: (stageName: string, progress: number) => void
   ): Promise<Proposal> {
-    const index = proposalsStore.findIndex((p) => p.id === proposalId);
-    if (index === -1) throw new Error('Proposal not found');
-
-    const current = proposalsStore[index];
-    proposalsStore[index] = { ...current, status: 'GENERATING' };
-
-    const stages = [
-      { name: 'Preparing tender information', progress: 15 },
-      { name: 'Preparing opportunity analysis', progress: 35 },
-      { name: 'Preparing company profile', progress: 50 },
-      { name: 'Generating proposal sections', progress: 75 },
-      { name: 'Validating draft', progress: 90 },
-      { name: 'Draft ready', progress: 100 },
-    ];
-
-    for (const stage of stages) {
-      if (onStageUpdate) {
-        onStageUpdate(stage.name, stage.progress);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 350));
+    if (onStageUpdate) {
+      onStageUpdate('Starting generation', 20);
     }
-
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    // Populate tailored high quality sections
-    const generatedSections: ProposalSection[] = [
-      {
-        id: 'sec-exec',
-        title: 'Executive Summary',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Deloitte Digital & Advisory EMEA submits this ${current.config.proposalType} for "${current.opportunityTitle}".\n\nOur proposal aligns directly with the requirements specified by ${current.source}. Utilizing ${current.config.companyProfileName}'s deep public sector capabilities, our solution guarantees full technical compliance, robust risk mitigation, and seamless project execution tailored for ${current.country}.`
-      },
-      {
-        id: 'sec-req',
-        title: 'Understanding of Requirements',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `We have thoroughly analyzed the scope for "${current.opportunityTitle}".\n\nKey Requirements Highlighted:\n${current.requirementsSummary.keyRequirements.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n\nOur team brings verified experience fulfilling each specific operational constraint.`
-      },
-      {
-        id: 'sec-comp',
-        title: 'Company Profile',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `${current.config.companyProfileName} is a global leader in management consulting and cloud transformation.\n\nCore Service Lines:\n• Enterprise Architecture & AI Integration\n• Cloud Engineering & Sovereign Infrastructure\n• Program Management & Governance\n• ISO 27001 & Cyber Security Operations`
-      },
-      {
-        id: 'sec-approach',
-        title: 'Proposed Approach',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Our proposed approach is structured with a ${current.config.tone.toLowerCase()} focus on high availability, security by design, and rapid value delivery.\n\nKey Pillars:\n1. Sovereign Compliance: Absolute adherence to European data sovereignty frameworks.\n2. Modular Component Design: Containerized microservices to ensure future adaptability.\n3. Transparent Governance: Real-time dashboard tracking for project stakeholders.`
-      },
-      {
-        id: 'sec-method',
-        title: 'Methodology',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Delivery will follow the Deloitte Agile Public Sector (DAPS) Framework:\n\n• Sprint 1–4: Inception, Security Concept & Blueprint Signoff\n• Sprint 5–12: Core Engineering & Modular Component Integration\n• Sprint 13–18: Acceptance Testing, User Training & Go-Live Preparation`
-      },
-      {
-        id: 'sec-tech',
-        title: 'Technical Solution',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `The Technical Solution leverages open standards and cloud-native architecture.\n\nTech Stack Overview:\n• Infrastructure: Sovereign Cloud Kubernetes Cluster (ISO 27001 / BSI C5 certified)\n• Middleware: High-throughput event streaming & REST API Gateway\n• AI & Analytics: Gemini Flash model API backend proxied through server-side rate limiters`
-      },
-      {
-        id: 'sec-plan',
-        title: 'Project Plan',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Milestone Schedule:\n• Month 1: Project Kickoff & Stakeholder Alignment\n• Month 3: Technical Architecture Approval\n• Month 6: Beta Release & Initial User Acceptance Testing\n• Month 9: Full Production Cutover & Handover`
-      },
-      {
-        id: 'sec-team',
-        title: 'Team & Expertise',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Project Governance Team:\n• Lead Partner & Senior Executive Sponsor\n• Principal Enterprise Solutions Architect\n• Lead Security & Compliance Specialist\n• Senior Project Manager (PMP / PRINCE2 certified)`
-      },
-      {
-        id: 'sec-deliv',
-        title: 'Deliverables',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Formal Deliverable List:\n${current.requirementsSummary.deliverables.map((d, i) => `• Deliverable ${i + 1}: ${d}`).join('\n')}`
-      },
-      {
-        id: 'sec-qa',
-        title: "Quality Assurance",
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Quality Assurance includes 100% peer code reviews, automated CI/CD static security scanning (SAST), dynamic penetration testing, and independent quality audits before each milestone approval.`
-      },
-      {
-        id: 'sec-risk',
-        title: 'Risk Management',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `Risk Mitigation Matrix:\n• Sub-contractor & SLA Risk: Mitigated via binding partner consortium agreements.\n• Technical Complexity Risk: Mitigated via early prototyping and automated test suites.`
-      },
-      {
-        id: 'sec-concl',
-        title: 'Conclusion',
-        status: 'GENERATED',
-        lastUpdated: nowStr,
-        content: `In conclusion, ${current.config.companyProfileName} possesses the technical expertise, industry reputation, and project delivery maturity required to guarantee success for ${current.opportunityTitle}.`
-      }
-    ];
-
-    const updatedProposal: Proposal = {
-      ...proposalsStore[index],
-      status: 'READY_FOR_REVIEW',
-      updatedAt: nowStr,
-      sections: generatedSections,
-    };
-
-    proposalsStore[index] = updatedProposal;
-    return updatedProposal;
+    const data = await http<any>(`/v1/proposals/${proposalId}/generate`, { method: 'POST' });
+    if (onStageUpdate) {
+      onStageUpdate('Draft ready', 100);
+    }
+    return mapProposal(data);
   },
 
-  // PATCH /v1/proposals/:proposal_id
   async updateProposal(proposalId: string, updates: Partial<Proposal>): Promise<Proposal> {
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    const index = proposalsStore.findIndex((p) => p.id === proposalId);
-    if (index === -1) throw new Error('Proposal not found');
-
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const updated: Proposal = {
-      ...proposalsStore[index],
-      ...updates,
-      updatedAt: nowStr,
-    };
-
-    proposalsStore[index] = updated;
-    return updated;
+    const data = await http<any>(`/v1/proposals/${proposalId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    return mapProposal(data);
   },
 
-  // POST /v1/proposals/:proposal_id/sections/:section_id/regenerate
   async regenerateSection(
     proposalId: string,
     sectionId: string,
     action: 'Regenerate' | 'Improve' | 'Shorten' | 'Expand'
   ): Promise<ProposalSection> {
-    await new Promise((resolve) => setTimeout(resolve, 600)); // simulate section LLM call
-    const proposal = proposalsStore.find((p) => p.id === proposalId);
-    if (!proposal) throw new Error('Proposal not found');
-
-    const section = proposal.sections.find((s) => s.id === sectionId);
-    if (!section) throw new Error('Section not found');
-
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    let newContent = section.content;
-    if (action === 'Shorten') {
-      newContent = section.content
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .slice(0, 3)
-        .join('\n');
-      newContent += '\n\n[Section concise summary updated via AI]';
-    } else if (action === 'Expand') {
-      newContent = section.content + `\n\nAdditional Comprehensive Detail (${action}):\nFurthermore, our team enforces continuous monitoring and automated operational telemetry across every deployment stage to guarantee resilience, compliance, and strategic alignment with tender objectives.`;
-    } else if (action === 'Improve') {
-      newContent = section.content.replace(/Deloitte/g, 'Deloitte Digital & Advisory (EMEA Public Sector)') + `\n\n[Polished with enhanced executive terminology & compliance precision]`;
-    } else {
-      newContent = `Regenerated Section Content (${section.title}):\n\nThis section has been regenerated using the latest context from tender "${proposal.opportunityTitle}", company profile "${proposal.config.companyProfileName}", and specific guidelines (${proposal.config.additionalInstructions || 'Standard guidelines'}). All technical points are tailored to ${proposal.country} public sector standards.`;
-    }
-
-    const updatedSection: ProposalSection = {
-      ...section,
-      content: newContent,
-      status: 'EDITED',
-      lastUpdated: nowStr,
-    };
-
-    // Update in store
-    const propIndex = proposalsStore.findIndex((p) => p.id === proposalId);
-    if (propIndex !== -1) {
-      const updatedSections = proposalsStore[propIndex].sections.map((s) =>
-        s.id === sectionId ? updatedSection : s
-      );
-      proposalsStore[propIndex] = {
-        ...proposalsStore[propIndex],
-        updatedAt: nowStr,
-        sections: updatedSections,
-      };
-    }
-
-    return updatedSection;
-  },
-
-  // GET /v1/proposals/:proposal_id/quality
-  async getProposalQuality(proposalId: string): Promise<ProposalQualityMetrics> {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    const proposal = proposalsStore.find((p) => p.id === proposalId);
-    if (!proposal) {
-      return {
-        tenderAlignment: 90,
-        requirementCoverage: 85,
-        companyCapabilityAlignment: 92,
-        missingInformation: ['Team CVs not provided', 'Pricing schedule pending'],
-        aiConfidence: 'High',
-      };
-    }
-    return proposal.qualityMetrics;
-  },
-
-  // POST /v1/proposals/:proposal_id/export
-  async exportProposal(proposalId: string, format: 'pdf' | 'docx' | 'markdown'): Promise<{ fileName: string; fileUrl: string }> {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const proposal = proposalsStore.find((p) => p.id === proposalId);
-    const titleSlug = (proposal?.config.title || 'Proposal').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const fileName = `${titleSlug}_draft.${format}`;
-
-    // Mark status as EXPORTED if currently ready or in review
-    if (proposal && (proposal.status === 'READY_FOR_REVIEW' || proposal.status === 'DRAFT')) {
-      await this.updateProposal(proposalId, { status: 'EXPORTED' });
-    }
-
+    const data = await http<any>(`/v1/proposals/${proposalId}/sections/${sectionId}/regenerate`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
     return {
-      fileName,
-      fileUrl: `#export-${format}-${proposalId}`,
+      id: String(data.id || sectionId),
+      title: String(data.title || ''),
+      content: String(data.content || ''),
+      status: (String(data.status || 'GENERATED').toUpperCase() as any),
+      lastUpdated: String(data.lastUpdated || data.last_updated || new Date().toISOString()),
+    };
+  },
+
+  async getProposalQuality(proposalId: string): Promise<ProposalQualityMetrics> {
+    const data = await http<any>(`/v1/proposals/${proposalId}/quality`);
+    return {
+      tenderAlignment: Number(data?.tenderAlignment ?? 0),
+      requirementCoverage: Number(data?.requirementCoverage ?? 0),
+      companyCapabilityAlignment: Number(data?.companyCapabilityAlignment ?? 0),
+      completeness: Number(data?.completeness ?? 0),
+      missingInformation: Array.isArray(data?.missingInformation) ? data.missingInformation : [],
+      aiConfidence: toAiConfidenceLabel(data?.aiConfidence),
+    };
+  },
+
+  async exportProposal(
+    proposalId: string,
+    format: 'pdf' | 'docx' | 'markdown'
+  ): Promise<{ fileName: string; fileUrl: string }> {
+    const data = await http<any>(`/v1/proposals/${proposalId}/export`, {
+      method: 'POST',
+      body: JSON.stringify({ format }),
+    });
+    return {
+      fileName: String(data.fileName || ''),
+      fileUrl: String(data.fileUrl || ''),
     };
   },
 };
-

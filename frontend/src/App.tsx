@@ -11,6 +11,7 @@ import { PipelineRunsPage } from './pages/PipelineRunsPage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
 import { CostUsagePage } from './pages/CostUsagePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ProfileOnboardingPage } from './pages/ProfileOnboardingPage';
 
 import {
   Opportunity,
@@ -82,21 +83,35 @@ export default function App() {
     setIsRunExecuting(true);
     try {
       const newRun = await apiService.triggerPipelineRun('Manual Header Execution');
-      const updatedRuns = await apiService.getPipelineRuns();
-      setRuns(updatedRuns);
       setSelectedRunId(newRun.id);
-
-      // Simulate step progression
-      setTimeout(async () => {
-        setIsRunExecuting(false);
-        const refreshedRuns = await apiService.getPipelineRuns();
-        setRuns(refreshedRuns);
-      }, 1500);
+      const refreshedRuns = await apiService.getPipelineRuns();
+      setRuns(refreshedRuns);
     } catch (err) {
       console.error('Error executing run:', err);
       setIsRunExecuting(false);
     }
   };
+
+  // Live pipeline polling while any run is active.
+  useEffect(() => {
+    const hasActiveRun = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED');
+    if (!isRunExecuting && !hasActiveRun) return;
+
+    const poll = async () => {
+      try {
+        const freshRuns = await apiService.getPipelineRuns();
+        setRuns(freshRuns);
+        const stillActive = freshRuns.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED');
+        if (!stillActive) setIsRunExecuting(false);
+      } catch (err) {
+        console.error('Error polling pipeline runs:', err);
+      }
+    };
+
+    const timer = setInterval(poll, 2000);
+    void poll();
+    return () => clearInterval(timer);
+  }, [isRunExecuting, runs]);
 
   const handleReAnalyzeOpportunity = async (id: string) => {
     setIsAnalyzingId(id);
@@ -135,11 +150,24 @@ export default function App() {
       setCompanyProfile(saved);
     } catch (err) {
       console.error('Error saving company profile:', err);
+      throw err;
     }
   };
 
   const activeOpportunity = opportunities.find((o) => o.id === selectedOpportunityId) || null;
   const openReviewsCount = reviews.filter((r) => r.status === 'OPEN').length;
+  const isProfileConfigured = (profile: CompanyProfile): boolean =>
+    Boolean(
+      profile.name &&
+      profile.name.trim().toLowerCase() !== 'default organization' &&
+      (
+        profile.description.trim() ||
+        profile.primarySector.trim() ||
+        profile.subSectors.length ||
+        profile.coreServices.length ||
+        profile.targetCountries.length
+      )
+    );
 
   if (isLoading || !costMetrics || !companyProfile) {
     return (
@@ -149,6 +177,10 @@ export default function App() {
         <p className="text-xs text-slate-400 mt-1">Loading AI Gatekeeper & Opportunity Intelligence Store</p>
       </div>
     );
+  }
+
+  if (!isProfileConfigured(companyProfile)) {
+    return <ProfileOnboardingPage profile={companyProfile} onSaveProfile={handleSaveProfile} />;
   }
 
   return (

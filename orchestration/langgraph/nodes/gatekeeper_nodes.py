@@ -9,12 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
 from time import sleep
 from typing import Any
 from uuid import UUID
 
 from orchestration.langgraph.nodes.shared_nodes import record_error
 from orchestration.langgraph.state import GraphState
+
+INGESTION_PER_SOURCE_LIMIT = max(1, int(os.getenv("PIPELINE_INGESTION_PER_SOURCE_LIMIT", "20")))
+GATEKEEPER_MAX_ITEMS = max(1, int(os.getenv("PIPELINE_GATEKEEPER_MAX_ITEMS", "10")))
 
 
 @dataclass(slots=True)
@@ -107,6 +111,18 @@ def fetch_raw_staging(
 
     response = query.execute()
     rows = response.data or []
+    # Ingestion cap: keep at most N rows per source (default: 20).
+    if rows:
+        per_source_count: dict[str, int] = {}
+        limited_rows: list[dict[str, Any]] = []
+        for row in rows:
+            source = str(row.get("source") or "unknown_source")
+            seen = per_source_count.get(source, 0)
+            if seen >= INGESTION_PER_SOURCE_LIMIT:
+                continue
+            per_source_count[source] = seen + 1
+            limited_rows.append(row)
+        rows = limited_rows
 
     gatekeeper = dict(state.get("gatekeeper", {}))
     gatekeeper["fetched"] = len(rows)
@@ -150,6 +166,11 @@ def filter_processed_gatekeeper(
             skipped += 1
             continue
         work_items.append(row)
+
+    # Gatekeeper cap: process at most N rows (default: 10) per run.
+    if len(work_items) > GATEKEEPER_MAX_ITEMS:
+        skipped += len(work_items) - GATEKEEPER_MAX_ITEMS
+        work_items = work_items[:GATEKEEPER_MAX_ITEMS]
 
     gatekeeper = dict(state.get("gatekeeper", {}))
     gatekeeper["skipped"] = gatekeeper.get("skipped", 0) + skipped

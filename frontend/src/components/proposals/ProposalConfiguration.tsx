@@ -24,7 +24,7 @@ export const ProposalConfiguration: React.FC<ProposalConfigurationProps> = ({
   disabled = false,
 }) => {
   const [title, setTitle] = React.useState(initialTitle || 'Proposal Draft');
-  const [profileId, setProfileId] = React.useState('prof-01');
+  const [profileId, setProfileId] = React.useState(companyProfile.id || 'default');
   const [language, setLanguage] = React.useState<ProposalLanguage>('English');
   const [type, setType] = React.useState<ProposalType>('Technical Proposal');
   const [tone, setTone] = React.useState<ProposalTone>('Professional');
@@ -35,6 +35,10 @@ export const ProposalConfiguration: React.FC<ProposalConfigurationProps> = ({
       setTitle(initialTitle);
     }
   }, [initialTitle]);
+
+  React.useEffect(() => {
+    setProfileId(companyProfile.id || 'default');
+  }, [companyProfile.id]);
 
   const presetInstructions = [
     'Emphasize our cloud modernization experience.',
@@ -92,9 +96,9 @@ export const ProposalConfiguration: React.FC<ProposalConfigurationProps> = ({
           disabled={disabled || isGenerating}
           className="w-full px-3 py-1.5 text-xs bg-[#F5F6F7] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#86BC25]"
         >
-          <option value="prof-01">{companyProfile.name} (Default Company Profile)</option>
-          <option value="prof-02">Deloitte Cybersecurity & Defense Practice</option>
-          <option value="prof-03">Deloitte Public Sector Cloud Advisory</option>
+          <option value={companyProfile.id || 'default'}>
+            {companyProfile.name} ({companyProfile.id || 'default'})
+          </option>
         </select>
       </div>
 

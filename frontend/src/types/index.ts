@@ -148,7 +148,9 @@ export interface CostMetrics {
 }
 
 export interface CompanyProfile {
+  id: string;
   name: string;
+  description: string;
   primarySector: string;
   subSectors: string[];
   coreServices: string[];
@@ -161,4 +163,3 @@ export interface CompanyProfile {
 }
 
 export * from './proposal';
-

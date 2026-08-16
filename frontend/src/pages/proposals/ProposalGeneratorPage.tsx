@@ -35,6 +35,7 @@ export const ProposalGeneratorPage: React.FC<ProposalGeneratorPageProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState('');
   const [progressPercent, setProgressPercent] = useState(0);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const currentOpportunity =
     opportunities.find((o) => o.id === selectedOppId) || validOpportunities[0] || null;
@@ -45,6 +46,7 @@ export const ProposalGeneratorPage: React.FC<ProposalGeneratorPageProps> = ({
     if (!currentOpportunity || isNotFit) return;
 
     setIsGenerating(true);
+    setGenerationError(null);
     setGenerationStage('Preparing tender information');
     setProgressPercent(10);
 
@@ -63,6 +65,7 @@ export const ProposalGeneratorPage: React.FC<ProposalGeneratorPageProps> = ({
       onProposalCreated(proposal);
     } catch (err) {
       console.error('Error generating proposal:', err);
+      setGenerationError(err instanceof Error ? err.message : 'Proposal generation failed. Please try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -155,6 +158,12 @@ export const ProposalGeneratorPage: React.FC<ProposalGeneratorPageProps> = ({
           <p className="text-xs text-slate-500 mt-1">
             Select a tender opportunity from the top dropdown or navigate from the Opportunities page.
           </p>
+        </div>
+      )}
+
+      {generationError && (
+        <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-md">
+          {generationError}
         </div>
       )}
 

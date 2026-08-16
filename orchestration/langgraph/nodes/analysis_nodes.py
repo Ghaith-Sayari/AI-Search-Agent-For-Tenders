@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
 from time import sleep
 from typing import Any
 
 from orchestration.langgraph.nodes.shared_nodes import record_error
 from orchestration.langgraph.state import GraphState
+
+ANALYSIS_MAX_ITEMS = max(1, int(os.getenv("PIPELINE_ANALYSIS_MAX_ITEMS", "5")))
 
 
 @dataclass(slots=True)
@@ -135,6 +138,11 @@ def fetch_pending_production(
             skipped += 1
             continue
         work_items.append(row)
+
+    # Analysis cap: process at most N rows (default: 5) per run.
+    if len(work_items) > ANALYSIS_MAX_ITEMS:
+        skipped += len(work_items) - ANALYSIS_MAX_ITEMS
+        work_items = work_items[:ANALYSIS_MAX_ITEMS]
 
     analysis = dict(state.get("analysis", {}))
     analysis["fetched"] = len(source_rows)
@@ -439,6 +447,6 @@ def queue_analysis_review(state: GraphState) -> dict[str, Any]:
     }
 
 
-def close_analysis_item() -> dict[str, Any]:
+def close_analysis_item(state: GraphState | None = None) -> dict[str, Any]:
     """No-op terminal node for analysis item closure."""
     return {"status": {"current_node": "close_analysis_item"}}

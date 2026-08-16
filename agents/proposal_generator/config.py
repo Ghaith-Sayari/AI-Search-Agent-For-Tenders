@@ -21,10 +21,16 @@ class ProposalGeneratorConfig:
 
     @classmethod
     def from_env(cls) -> "ProposalGeneratorConfig":
+        model = os.getenv("PROPOSAL_GENERATOR_MODEL") or os.getenv("GATEKEEPER_MODEL") or "llama3.2:3b"
+        base_url = (
+            os.getenv("PROPOSAL_GENERATOR_OLLAMA_BASE_URL")
+            or os.getenv("OLLAMA_BASE_URL")
+            or "http://localhost:11434"
+        )
         return cls(
             llm=ProposalLLMConfig(
-                model=os.getenv("PROPOSAL_GENERATOR_MODEL", "llama3.2:3b"),
-                base_url=os.getenv("PROPOSAL_GENERATOR_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
+                model=model,
+                base_url=base_url.rstrip("/"),
                 temperature=float(os.getenv("PROPOSAL_GENERATOR_TEMPERATURE", "0.2")),
                 max_tokens=int(os.getenv("PROPOSAL_GENERATOR_MAX_TOKENS", "700")),
                 timeout_seconds=int(os.getenv("PROPOSAL_GENERATOR_TIMEOUT_SECONDS", "45")),

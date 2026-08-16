@@ -15,6 +15,7 @@ pydantic==2.13.4
 python-dotenv==1.2.2
 langsmith==0.4.14
 python-docx==1.1.2
+reportlab==4.2.2
 
 # Database and semantic search
 supabase==2.31.0
