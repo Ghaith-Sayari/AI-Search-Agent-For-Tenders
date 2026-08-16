@@ -1,0 +1,8 @@
+{
+  "name": "Remix remix 222",
+  "description": "Professional AI platform to monitor public tenders, analyze business fit, and manage strategic opportunities through high-level intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
