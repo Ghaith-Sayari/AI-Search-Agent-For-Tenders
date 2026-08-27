@@ -10,6 +10,7 @@ def weight_for(signal_name: str) -> float:
     mapping = {
         "keyword": weights.keyword,
         "location": weights.location,
+        "semantic": weights.semantic,
         "llm_judgment": weights.llm_judgment,
     }
     if signal_name not in mapping:

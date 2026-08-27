@@ -3,7 +3,9 @@ import { Download, FileText, FileCode, Check, RotateCw } from 'lucide-react';
 
 interface ProposalExportProps {
   proposalId: string;
-  onExport: (format: 'pdf' | 'docx' | 'markdown') => Promise<{ fileName: string }>;
+  onExport: (
+    format: 'pdf' | 'docx' | 'markdown'
+  ) => Promise<{ fileName: string; downloadUrl?: string }>;
   disabled?: boolean;
 }
 
@@ -16,12 +18,43 @@ export const ProposalExport: React.FC<ProposalExportProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [exportedFile, setExportedFile] = useState<string | null>(null);
 
+  const triggerDownload = async (downloadUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+      const blob = await response.blob();
+      const localUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = localUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(localUrl), 1000);
+      return;
+    } catch (err) {
+      console.warn('Blob download fallback failed, opening direct URL instead:', err);
+    }
+
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   const handleTriggerExport = async () => {
     if (disabled || isExporting) return;
     setIsExporting(true);
     setExportedFile(null);
     try {
       const res = await onExport(selectedFormat);
+      if (res.downloadUrl) {
+        await triggerDownload(res.downloadUrl, res.fileName);
+      }
       setExportedFile(res.fileName);
     } catch (err) {
       console.error('Export error:', err);

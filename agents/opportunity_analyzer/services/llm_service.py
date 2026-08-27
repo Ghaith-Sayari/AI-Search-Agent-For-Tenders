@@ -254,3 +254,51 @@ def analyze_fit(profile_text: str, extracted_json: Union[str, dict]) -> LLMRespo
         extracted_json=extracted_json_str,
     )
     return _generate_structured("analysis", prompt, config.llm.analysis_temperature)
+
+
+@retry(
+    max_attempts=config.llm.max_retries,
+    backoff_seconds=config.llm.retry_backoff_seconds,
+    exceptions=(requests.RequestException,),
+)
+def _call_ollama_embed(text: str) -> list[float]:
+    # Newer Ollama API endpoint.
+    response = requests.post(
+        f"{config.llm.base_url}/api/embed",
+        json={"model": config.llm.embedding_model, "input": text},
+        timeout=config.llm.embedding_timeout_seconds,
+    )
+    if response.status_code == 404:
+        # Fallback for older Ollama versions.
+        response = requests.post(
+            f"{config.llm.base_url}/api/embeddings",
+            json={"model": config.llm.embedding_model, "prompt": text},
+            timeout=config.llm.embedding_timeout_seconds,
+        )
+    response.raise_for_status()
+    data = response.json()
+
+    # /api/embed
+    embs = data.get("embeddings")
+    if isinstance(embs, list) and embs and isinstance(embs[0], list):
+        vec = embs[0]
+    # /api/embeddings
+    elif isinstance(data.get("embedding"), list):
+        vec = data.get("embedding")
+    else:
+        raise ValueError("Embedding response did not contain a valid embedding vector")
+
+    if not isinstance(vec, list) or not vec:
+        raise ValueError("Embedding vector is empty")
+    return [float(x) for x in vec]
+
+
+def embedding_model() -> str:
+    return config.llm.embedding_model
+
+
+def embed(text: str) -> list[float]:
+    text_clean = (text or "").strip()
+    if not text_clean:
+        raise ValueError("Cannot embed empty text")
+    return _call_ollama_embed(text_clean)

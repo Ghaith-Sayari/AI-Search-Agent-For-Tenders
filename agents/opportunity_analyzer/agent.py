@@ -21,6 +21,7 @@ from agents.opportunity_analyzer.analyzers import (
     keyword_analyzer,
     llm_judgment_analyzer,
     location_analyzer,
+    semantic_analyzer,
 )
 from agents.opportunity_analyzer.config import config
 from agents.opportunity_analyzer.models.analysis import Analysis
@@ -55,6 +56,9 @@ class OpportunityAnalyzerSettings:
         base_url = os.getenv("OPPORTUNITY_ANALYZER_OLLAMA_BASE_URL")
         if base_url:
             config.llm.base_url = base_url.rstrip("/")
+        embedding_model = os.getenv("OPPORTUNITY_ANALYZER_EMBEDDING_MODEL")
+        if embedding_model:
+            config.llm.embedding_model = embedding_model
 
         return cls(
             source_table=os.getenv("OPPORTUNITY_ANALYZER_SOURCE_TABLE", "production_tender"),
@@ -264,6 +268,7 @@ class OpportunityAnalyzerAgent:
 
         analysis.add_signal(keyword_analyzer.analyze(opportunity, profile, weight_for("keyword")))
         analysis.add_signal(location_analyzer.analyze(opportunity, profile, weight_for("location")))
+        analysis.add_signal(semantic_analyzer.analyze(opportunity, profile, weight_for("semantic")))
         analysis.add_signal(
             llm_judgment_analyzer.analyze(opportunity, profile, weight_for("llm_judgment"))
         )

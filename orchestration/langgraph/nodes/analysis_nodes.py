@@ -207,8 +207,8 @@ def prepare_analysis_item(
 
 
 def compute_deterministic_signals(state: GraphState) -> dict[str, Any]:
-    """Run deterministic analysis signals (keyword/location only)."""
-    from agents.opportunity_analyzer.analyzers import keyword_analyzer, location_analyzer
+    """Run deterministic analysis signals (keyword/location/semantic)."""
+    from agents.opportunity_analyzer.analyzers import keyword_analyzer, location_analyzer, semantic_analyzer
     from agents.opportunity_analyzer.models.analysis import Analysis
     from agents.opportunity_analyzer.scoring.decision import decide
     from agents.opportunity_analyzer.scoring.scorer import score_analysis
@@ -224,6 +224,7 @@ def compute_deterministic_signals(state: GraphState) -> dict[str, Any]:
     analysis = Analysis(opportunity_id=opportunity.id, profile_id=profile.id)
     analysis.add_signal(keyword_analyzer.analyze(opportunity, profile, weight_for("keyword")))
     analysis.add_signal(location_analyzer.analyze(opportunity, profile, weight_for("location")))
+    analysis.add_signal(semantic_analyzer.analyze(opportunity, profile, weight_for("semantic")))
     score_analysis(analysis)
     decide(analysis)
 

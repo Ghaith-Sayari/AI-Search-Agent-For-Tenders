@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -68,6 +74,12 @@ def _ingest_from_scrapers(per_source_limit: int = 20) -> dict[str, Any]:
     from scrapers.registry import discover_scrapers
 
     per_source_limit = max(1, int(per_source_limit))
+    isolated_fetch = str(
+        os.getenv("PIPELINE_INGESTION_ISOLATED_FETCH", "true")
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    fallback_to_raw = str(
+        os.getenv("PIPELINE_INGESTION_FALLBACK_TO_RAW", "false")
+    ).strip().lower() in {"1", "true", "yes", "on"}
     scrapers = discover_scrapers()
     stats: dict[str, Any] = {
         "scrapers": len(scrapers),
@@ -79,16 +91,105 @@ def _ingest_from_scrapers(per_source_limit: int = 20) -> dict[str, Any]:
         "sources": {},
     }
 
+    def _fetch_source_items_isolated(source_name: str) -> tuple[list[dict[str, Any]], str | None, dict[str, Any] | None]:
+        """
+        Fetch one source in its own process. This avoids Playwright/asyncio issues
+        when ingestion is triggered from threaded API contexts on Windows.
+        Returns (raw_items, error_message_or_none, debug_stats_or_none).
+        """
+        marker = "__SOURCE_FETCH_RESULT__"
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{source_name}.json") as tf:
+            out_path = Path(tf.name)
+
+        script = """
+import json
+import sys
+import traceback
+from pathlib import Path
+from scrapers.registry import discover_scrapers
+
+name = sys.argv[1]
+out = sys.argv[2]
+marker = sys.argv[3]
+scrapers = discover_scrapers()
+scraper = scrapers.get(name)
+
+try:
+    if scraper is None:
+        raise RuntimeError(f"Scraper not found: {name}")
+    raw = scraper.fetch() or []
+    if not isinstance(raw, list):
+        raw = []
+    Path(out).write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    debug_stats = getattr(scraper, "debug_stats", None)
+    print(marker + json.dumps({"ok": True, "fetched_before_limit": len(raw), "debug_stats": debug_stats if isinstance(debug_stats, dict) else None}, ensure_ascii=False))
+except Exception as exc:
+    print(marker + json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False))
+    traceback.print_exc()
+"""
+
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", script, source_name, str(out_path), marker],
+                capture_output=True,
+                text=True,
+                timeout=60 * 20,
+                cwd=str(Path.cwd()),
+                env=env,
+            )
+
+            payload: dict[str, Any] | None = None
+            for line in reversed((proc.stdout or "").splitlines()):
+                if line.startswith(marker):
+                    try:
+                        payload = json.loads(line[len(marker) :])
+                    except Exception:
+                        payload = None
+                    break
+
+            if not payload:
+                combined = "\n".join(part for part in [proc.stdout or "", proc.stderr or ""] if part).strip()
+                return [], f"Isolated source fetch returned no parseable result (exit={proc.returncode}): {combined[:2000]}", None
+
+            if not bool(payload.get("ok", False)):
+                return [], str(payload.get("error") or "isolated_fetch_failed"), None
+
+            try:
+                raw_loaded = json.loads(out_path.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                return [], f"Failed to load isolated fetch output file: {exc}", None
+            if not isinstance(raw_loaded, list):
+                raw_loaded = []
+            dbg = payload.get("debug_stats") if isinstance(payload.get("debug_stats"), dict) else None
+            return raw_loaded, None, dbg
+        finally:
+            try:
+                out_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     for source_name, scraper in scrapers.items():
         try:
-            raw = scraper.fetch() or []
+            if isolated_fetch:
+                raw, fetch_err, debug_stats = _fetch_source_items_isolated(source_name)
+                if fetch_err:
+                    raise RuntimeError(fetch_err)
+            else:
+                raw = scraper.fetch() or []
+                debug_stats = getattr(scraper, "debug_stats", None)
             if not isinstance(raw, list):
                 raw = []
             fetched_before_limit = len(raw)
             raw = raw[:per_source_limit]
             valid, dropped = normalize_batch(raw)
+            load_result: dict[str, Any] = {"attempted": len(valid), "inserted_batches": 0, "failed_batches": 0, "errors": []}
             if valid:
-                load_all(valid)
+                lr = load_all(valid)
+                if isinstance(lr, dict):
+                    load_result = lr
             stats["fetched"] += len(raw)
             stats["normalized"] += len(valid)
             stats["dropped"] += int(dropped)
@@ -99,20 +200,119 @@ def _ingest_from_scrapers(per_source_limit: int = 20) -> dict[str, Any]:
                 "dropped": int(dropped),
                 "error": "",
                 "note": "no_items_returned_by_scraper" if fetched_before_limit == 0 else "",
+                "loader": load_result,
+                "debug": debug_stats if isinstance(debug_stats, dict) else {},
             }
         except Exception as exc:  # noqa: BLE001
             err_msg = _format_ingestion_error(exc)
+            fallback_note = ""
+            fallback_used = False
+
+            if fallback_to_raw:
+                raw_path = Path("data") / "raw_scrapes" / f"{source_name}_raw.json"
+                try:
+                    if raw_path.exists():
+                        fallback_raw = json.loads(raw_path.read_text(encoding="utf-8"))
+                        if not isinstance(fallback_raw, list):
+                            fallback_raw = []
+                        fallback_before_limit = len(fallback_raw)
+                        fallback_raw = fallback_raw[:per_source_limit]
+                        valid, dropped = normalize_batch(fallback_raw)
+                        load_result: dict[str, Any] = {"attempted": len(valid), "inserted_batches": 0, "failed_batches": 0, "errors": []}
+                        if valid:
+                            lr = load_all(valid)
+                            if isinstance(lr, dict):
+                                load_result = lr
+                        stats["fetched"] += len(fallback_raw)
+                        stats["normalized"] += len(valid)
+                        stats["dropped"] += int(dropped)
+                        fallback_used = True
+                        fallback_note = "fallback_used_from_raw_json_after_scraper_error"
+                        stats["sources"][source_name] = {
+                            "fetched_before_limit": fallback_before_limit,
+                            "fetched": len(fallback_raw),
+                            "normalized": len(valid),
+                            "dropped": int(dropped),
+                            "error": err_msg,
+                            "note": fallback_note,
+                            "loader": load_result,
+                            "debug": {},
+                        }
+                except Exception as fallback_exc:  # noqa: BLE001
+                    fallback_note = f"fallback_failed: {fallback_exc}"
+
             stats["errors"][source_name] = err_msg
-            stats["sources"][source_name] = {
-                "fetched_before_limit": 0,
-                "fetched": 0,
-                "normalized": 0,
-                "dropped": 0,
-                "error": err_msg,
-                "note": "",
-            }
+            if not fallback_used:
+                stats["sources"][source_name] = {
+                    "fetched_before_limit": 0,
+                    "fetched": 0,
+                    "normalized": 0,
+                    "dropped": 0,
+                    "error": err_msg,
+                    "note": fallback_note,
+                    "loader": {"attempted": 0, "inserted_batches": 0, "failed_batches": 0, "errors": []},
+                    "debug": {},
+                }
 
     return stats
+
+
+def _ingest_from_scrapers_subprocess(per_source_limit: int = 20) -> dict[str, Any]:
+    """
+    Run ingestion in a separate Python process.
+    This avoids Windows Playwright issues when called from FastAPI background thread pools.
+    """
+    marker = "__INGESTION_STATS__"
+    script = (
+        "from api.services.run_service import _ingest_from_scrapers;"
+        "import json;"
+        f"print('{marker}'+json.dumps(_ingest_from_scrapers({int(per_source_limit)}), ensure_ascii=False))"
+    )
+    env = os.environ.copy()
+    # Force UTF-8 in child process to avoid Windows charmap crashes on scraper logs.
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60 * 30,
+        cwd=str(Path.cwd()),
+        env=env,
+    )
+
+    combined_output = "\n".join(
+        part for part in [proc.stdout or "", proc.stderr or ""] if part
+    )
+    for line in reversed((proc.stdout or "").splitlines()):
+        if line.startswith(marker):
+            try:
+                return json.loads(line[len(marker) :])
+            except Exception as exc:  # noqa: BLE001
+                break_err = f"Failed to parse subprocess ingestion stats: {exc}"
+                return {
+                    "scrapers": 0,
+                    "per_source_limit": per_source_limit,
+                    "fetched": 0,
+                    "normalized": 0,
+                    "dropped": 0,
+                    "errors": {"ingestion_subprocess": break_err},
+                    "sources": {},
+                }
+
+    err_msg = (
+        f"Ingestion subprocess failed (exit={proc.returncode}). "
+        f"Output: {(combined_output or '').strip()[:4000]}"
+    )
+    return {
+        "scrapers": 0,
+        "per_source_limit": per_source_limit,
+        "fetched": 0,
+        "normalized": 0,
+        "dropped": 0,
+        "errors": {"ingestion_subprocess": err_msg},
+        "sources": {},
+    }
 
 
 def _repo() -> RunRepository:
@@ -156,7 +356,14 @@ def execute_run(run_id: str, request: CreateRunRequest) -> None:
         from orchestration.langgraph.run_service import RunRequest, run_and_get_summary
 
         # Ingestion: scrape + normalize + load raw_tender_staging.
-        ingestion_stats = _ingest_from_scrapers(per_source_limit=20)
+        use_subprocess_ingestion = str(
+            os.getenv("PIPELINE_INGESTION_USE_SUBPROCESS", "true")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        ingestion_stats = (
+            _ingest_from_scrapers_subprocess(per_source_limit=20)
+            if use_subprocess_ingestion
+            else _ingest_from_scrapers(per_source_limit=20)
+        )
         run = repo.get_run(run_id)
         if not run:
             return
@@ -232,7 +439,23 @@ def execute_run(run_id: str, request: CreateRunRequest) -> None:
         run.reviewCount = int(gk.get("needs_review", 0)) + int(an.get("review", 0))
         run.failedCount = int(gk.get("failed", 0)) + int(an.get("failed", 0))
         run.llmCallsCount = int(cost.get("llm_calls", 0))
-        run.status = "COMPLETED"
+        summary_terminal = str(summary.get("terminal_status") or "completed").strip().lower()
+        has_ingestion_errors = bool(ingestion_stats.get("errors"))
+        has_graph_errors = bool(summary.get("errors_count", 0))
+        has_severe_errors = bool(summary.get("has_severe_errors", False))
+        if summary_terminal == "failed" or has_severe_errors:
+            run.status = "FAILED"
+            _set_stage_status(run, "COMPLETED", "FAILED")
+        elif has_ingestion_errors or has_graph_errors:
+            run.status = "PARTIALLY_COMPLETED"
+            completed_details = dict(next((s.details for s in run.stages if s.stage == "COMPLETED"), {}) or {})
+            completed_details["warnings"] = {
+                "ingestion_errors": len(ingestion_stats.get("errors", {})),
+                "graph_errors": int(summary.get("errors_count", 0)),
+            }
+            _set_stage_status(run, "COMPLETED", "COMPLETED", details=completed_details)
+        else:
+            run.status = "COMPLETED"
         run.completedAt = _utc_iso()
 
         started = datetime.fromisoformat(run.startedAt)

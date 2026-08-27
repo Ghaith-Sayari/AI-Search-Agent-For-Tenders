@@ -8,6 +8,7 @@ flaky/misconfigured signals from quietly corrupting the total.
 Current configured signals:
 - keyword
 - location
+- semantic
 - llm_judgment (with an additional min_llm_confidence gate from config)
 """
 
