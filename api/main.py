@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
+import threading
 from typing import Iterable
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from api.services.offer_notification_service import OfferNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +63,49 @@ def create_app() -> FastAPI:
             ("api.routes.company_profile", "router"),
         ],
     )
+
+    @app.on_event("startup")
+    async def _start_offer_notification_worker() -> None:
+        service = OfferNotificationService()
+        if not service.is_enabled():
+            logger.info("Offer notification worker disabled by configuration.")
+            return
+
+        stop_event = threading.Event()
+        interval_seconds = max(10, int(os.getenv("OFFER_EMAIL_POLL_INTERVAL_SECONDS", "60")))
+
+        def _worker_loop() -> None:
+            logger.info("Offer notification worker started (poll interval=%ss).", interval_seconds)
+            while not stop_event.is_set():
+                try:
+                    service.process_pending_notifications()
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("Offer notification worker iteration failed: %s", exc)
+                stop_event.wait(interval_seconds)
+            logger.info("Offer notification worker stopped.")
+
+        worker = threading.Thread(
+            target=_worker_loop,
+            name="offer-notification-worker",
+            daemon=True,
+        )
+        worker.start()
+        app.state.offer_notification_worker = {
+            "thread": worker,
+            "stop_event": stop_event,
+        }
+
+    @app.on_event("shutdown")
+    async def _stop_offer_notification_worker() -> None:
+        worker_state = getattr(app.state, "offer_notification_worker", None)
+        if not worker_state:
+            return
+        stop_event = worker_state.get("stop_event")
+        worker = worker_state.get("thread")
+        if stop_event:
+            stop_event.set()
+        if worker and worker.is_alive():
+            worker.join(timeout=5)
 
     return app
 

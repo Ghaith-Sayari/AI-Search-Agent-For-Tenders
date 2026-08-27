@@ -467,6 +467,13 @@ def execute_run(run_id: str, request: CreateRunRequest) -> None:
         run.durationSeconds = max(0.0, (completed - started).total_seconds())
 
         repo.save_run(run, summary=summary)
+        try:
+            from api.services.offer_notification_service import OfferNotificationService
+
+            OfferNotificationService().process_pending_notifications()
+        except Exception:  # noqa: BLE001
+            # Notification processing is best-effort and must not fail the run lifecycle.
+            pass
     except Exception as exc:  # noqa: BLE001
         run = repo.get_run(run_id)
         if not run:
@@ -497,3 +504,9 @@ def execute_run(run_id: str, request: CreateRunRequest) -> None:
                 "occurredAt": _utc_iso(),
             },
         )
+        try:
+            from api.services.offer_notification_service import OfferNotificationService
+
+            OfferNotificationService().process_pending_notifications()
+        except Exception:  # noqa: BLE001
+            pass
